@@ -238,7 +238,7 @@ class Blob {
   // for pruning by zhluo
   Dtype* cpu_data_prun() const;
   void Update_Prun();
-  void CalWeightPrun(Dtype** weight, int count, bool prun = false, int num = 0) const;
+  int CalWeightPrun(Dtype** weight, int count, bool prun = false, int num = 0) const;
   void ToProtoPrun(BlobProto* proto, bool write_diff = false, bool prun = false, int num = 0);
 
   /// @brief Compute the sum of absolute values (L1 norm) of the data.

@@ -672,13 +672,17 @@ void Blob<double>::Update_Prun() {
 }
 
 template <typename Dtype>
-void Blob<Dtype>::CalWeightPrun(Dtype** weight, int count, bool prun, int num) const {
+int Blob<Dtype>::CalWeightPrun(Dtype** weight, int count, bool prun, int num) const {
+  int prun_cnt = 0;
+  Dtype* tmp_data = *weight;
+  Dtype thr_weight = 0;
+  vector<Dtype> sort_weight(count);
+  
   if (FLAGS_prun_fc)
     {
-      int prun_cnt = 0;
-      Dtype* tmp_data = *weight;
-      Dtype thr_weight = 0;
-      vector<Dtype> sort_weight(count);
+      //Dtype* tmp_data = *weight;
+      //Dtype thr_weight = 0;
+      //vector<Dtype> sort_weight(count);
       if (prun)
 	{
 	  for (int i = 0; i < count; ++i)
@@ -755,18 +759,9 @@ void Blob<Dtype>::CalWeightPrun(Dtype** weight, int count, bool prun, int num) c
     }
   else if (FLAGS_prun_conv)
     {
-      //Dtype l2_weight = 0;
-      //Dtype max_weight = 0;
-      //Dtype min_weight = 0;
-      //Dtype thr = 0;
-      //Dtype alpha = 0.0001;
-      //Dtype beta = 0.0;
-      //Dtype gamma = 0.0;
-
-      int prun_cnt = 0;
-      Dtype* tmp_data = *weight;
-      Dtype thr_weight = 0;
-      vector<Dtype> sort_weight(count);
+      //Dtype* tmp_data = *weight;
+      //Dtype thr_weight = 0;
+      //vector<Dtype> sort_weight(count);
       if (prun)
 	{
 	  for (int i = 0; i < count; ++i)
@@ -788,7 +783,10 @@ void Blob<Dtype>::CalWeightPrun(Dtype** weight, int count, bool prun, int num) c
 	    }
 	  else
 	    {
-	      LOG(FATAL) << " Error: Illegal FC ratio ";
+	      //LOG(FATAL) << " Error: Illegal CONV ratio ";
+	      LOG(INFO) << " [Warning] CONV layers exceed to the default value[3]," <<
+		" pruning ratio use default value:<0.5>.";
+	      thr_weight = sort_weight[count * 0.5];
 	    }
 
 	  LOG(INFO) << "blob <CONV>  threshold: " << thr_weight;
@@ -800,47 +798,15 @@ void Blob<Dtype>::CalWeightPrun(Dtype** weight, int count, bool prun, int num) c
 		  prun_cnt++;
 		}
 	    }
-	  //for (int i = 0; i < count; i++)
-	  //	{
-	  //	  l2_weight += tmp_data[i] * tmp_data[i];
-	  //	  if (max_weight < tmp_data[i])
-	  //	    max_weight = tmp_data[i];
-	  //	  if (min_weight > tmp_data[i])
-	  //	    min_weight = tmp_data[i];
-	  //	}
-	  ////l2_weight = sqrt(l2_weight);
-	  //LOG(INFO) << "blob <> here sqrt l2 DATA: " << l2_weight;
-	  //LOG(INFO) << "blob <> max weight: " << max_weight;
-	  //LOG(INFO) << "blob <> min weight: " << min_weight;
-	  ////thr = fabs((max_weight + min_weight)/2);
-	  ////thr = sqrt(fabs(max_weight) * fabs(min_weight))/2;
-	  ////thr = pow(max_weight, 2.0) + pow(min_weight, 2.0);
-	  ////beta = (max_weight + min_weight)/2;
-	  //gamma = 1.0 - fabs(max_weight) - fabs(min_weight);
-	  //if (count > 1000)
-	  //	{
-	  //	  beta = 0.045;
-	  //	  gamma = 0.80;
-	  //	}
-	  //else
-	  //	{
-	  //	  beta = 0.025;
-	  //	  gamma = 0.60;
-	  //	}
-	  //thr = pow(fabs(beta - l2_weight * alpha), gamma);
-	  //LOG(INFO) << "blob <CONV> beta : " << beta << ", gamma: " << gamma <<", threshold: " << thr;
-	  //for (int i = 0; i < count; i++)
-	  //	{
-	  //	  //if (tmp_data[i] > -0.05 && tmp_data[i] < 0.05)
-	  //	  if (tmp_data[i] > -thr && tmp_data[i] < thr)
-	  //	    {
-	  //	      tmp_data[i] = 0;
-	  //	      prun_cnt++;
-	  //	    }
-	  //	}
 	  LOG(INFO) << ">total num: " << count << ", prun count: " << prun_cnt;
 	}
     }
+  else
+    {
+      LOG(FATAL) << " [Error] please set FLAGS_prun_fc or FLAGS_prun_conv valid,"<<
+	" reference \"src/caffe/prun_cfg.cfg\".";
+    }
+  return (count-prun_cnt);
 }
 
 template <>
@@ -913,10 +879,12 @@ void Blob<float>::ToProtoPrun(BlobProto* proto, bool write_diff, bool prun, int 
   proto->clear_diff();
   //float* data_vec = cpu_data_prun();
   float* data_vec = mutable_cpu_data();
-
-  CalWeightPrun(&data_vec, count_, prun, num);
-
-  if (FLAGS_sparse_csc && prun)
+  int valid_num = 0;
+  
+  valid_num = CalWeightPrun(&data_vec, count_, prun, num);
+  valid_num = valid_num * 2 + FLAGS_sparse_col + 1;
+    
+  if (FLAGS_sparse_csc && prun && (valid_num < count_))
     encode_weight(proto, data_vec);
   else
     {
@@ -943,10 +911,12 @@ void Blob<double>::ToProtoPrun(BlobProto* proto, bool write_diff, bool prun, int
   proto->clear_double_diff();
   //double* data_vec = cpu_data_prun();
   double* data_vec = mutable_cpu_data();
+  int valid_num = 0;
+		      
+  valid_num = CalWeightPrun(&data_vec, count_, prun, num);
+  valid_num = valid_num * 2 + FLAGS_sparse_col + 1;
 
-  CalWeightPrun(&data_vec, count_, prun, num);
-
-  if (FLAGS_sparse_csc && prun)
+  if (FLAGS_sparse_csc && prun && (valid_num < count_))
     {
       encode_weight(proto, data_vec);
     }
