@@ -25,5 +25,4 @@ max_iter: 0
 snapshot: 0
 snapshot_prefix: "examples/mnist/lenet"
 # solver mode: CPU or GPU
-#solver_mode: GPU
-solver_mode: CPU
+solver_mode: GPU

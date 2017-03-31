@@ -33,4 +33,5 @@ DECLARE_double(fc_ratio_2);
 DECLARE_bool(prun_retrain);
 DECLARE_bool(sparse_csc);
 DECLARE_int32(prun_fc_num);
+DECLARE_int32(sparse_col);
 #endif  // PRUN_CFG_HPP_

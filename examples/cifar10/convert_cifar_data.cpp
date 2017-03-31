@@ -28,6 +28,7 @@ DEFINE_bool(prun_conv, false, "Optional; pruning CONV layers");
 DEFINE_bool(prun_fc, false, "Optional; pruning FC layers");
 DEFINE_bool(prun_retrain, false, "Optional; retrain net after pruning");
 DEFINE_bool(sparse_csc, false, "Optional; blob use CSC sparse storage");
+DEFINE_int32(sparse_col, 1, "Optional; the number of FC layers");
 DEFINE_int32(prun_fc_num, 0, "Optional; the number of FC layers");
 DEFINE_double(conv_ratio_0, 0, "Optional; conv layer prun ratio");
 DEFINE_double(conv_ratio_1, 0, "Optional; conv layer prun ratio");

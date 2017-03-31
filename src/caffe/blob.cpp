@@ -492,19 +492,29 @@ void Blob<Dtype>::FromProto(const BlobProto& proto, bool reshape) {
   } else {
     CHECK(ShapeEquals(proto)) << "shape mismatch (reshape not set)";
   }
+
   // copy data
   Dtype* data_vec = mutable_cpu_data();
-  if (proto.double_data_size() > 0) {
-    CHECK_EQ(count_, proto.double_data_size());
-    for (int i = 0; i < count_; ++i) {
-      data_vec[i] = proto.double_data(i);
+  // modify for pruning, by zhluo
+  if (proto.csc_ptr_size() != 0)
+    {
+      decode_weight(&proto, &data_vec);
     }
-  } else {
-    CHECK_EQ(count_, proto.data_size());
-    for (int i = 0; i < count_; ++i) {
-      data_vec[i] = proto.data(i);
+  else
+    {
+      if (proto.double_data_size() > 0) {
+	CHECK_EQ(count_, proto.double_data_size());
+	for (int i = 0; i < count_; ++i) {
+	  data_vec[i] = proto.double_data(i);
+	}
+      } else {
+	CHECK_EQ(count_, proto.data_size());
+	for (int i = 0; i < count_; ++i) {
+	  data_vec[i] = proto.data(i);
+	}
+      }
     }
-  }
+
   if (proto.double_diff_size() > 0) {
     CHECK_EQ(count_, proto.double_diff_size());
     Dtype* diff_vec = mutable_cpu_diff();
@@ -576,7 +586,7 @@ void Blob<float>::Update_Prun() {
   float *diff_val_gpu = (float*)diff_->gpu_data();
   float *weight_val_gpu = static_cast<float*>(data_->mutable_cpu_data());
 #endif
-  
+
   switch (data_->head()) {
   case SyncedMemory::HEAD_AT_CPU:
     // perform computation on CPU
@@ -623,7 +633,7 @@ void Blob<double>::Update_Prun() {
   double *diff_val_gpu = (double*)diff_->gpu_data();
   double *weight_val_gpu = static_cast<double*>(data_->mutable_cpu_data());
 #endif
-  
+
   switch (data_->head()) {
   case SyncedMemory::HEAD_AT_CPU:
     // perform computation on CPU
@@ -675,7 +685,7 @@ void Blob<Dtype>::CalWeightPrun(Dtype** weight, int count, bool prun, int num) c
 	    sort_weight[i] = fabs(tmp_data[i]);
 
 	  sort(sort_weight.begin(), sort_weight.end());
-	  
+
 	  if (num == 0)
 	    {
 	      thr_weight = sort_weight[count * FLAGS_fc_ratio_0];
@@ -692,7 +702,7 @@ void Blob<Dtype>::CalWeightPrun(Dtype** weight, int count, bool prun, int num) c
 	    {
 	      LOG(FATAL) << " Error: Illegal FC ratio ";
 	    }
-	  
+
 	  LOG(INFO) << "blob <FC>  threshold: " << thr_weight;
 	  for (int i = 0; i < count; ++i)
 	    {
@@ -729,7 +739,7 @@ void Blob<Dtype>::CalWeightPrun(Dtype** weight, int count, bool prun, int num) c
 	  //	  beta = 0.025;
 	  //	  gamma = 0.60;
 	  //	}
-	  //thr = pow(fabs(beta - l2_weight * alpha), gamma); 
+	  //thr = pow(fabs(beta - l2_weight * alpha), gamma);
 	  //LOG(INFO) << "blob <> beta : " << beta << ", gamma: " << gamma <<", threshold: " << thr;
 	  //for (int i = 0; i < count; i++)
 	  //	{
@@ -752,18 +762,18 @@ void Blob<Dtype>::CalWeightPrun(Dtype** weight, int count, bool prun, int num) c
       //Dtype alpha = 0.0001;
       //Dtype beta = 0.0;
       //Dtype gamma = 0.0;
-  
+
       int prun_cnt = 0;
       Dtype* tmp_data = *weight;
       Dtype thr_weight = 0;
       vector<Dtype> sort_weight(count);
       if (prun)
-	{ 
+	{
 	  for (int i = 0; i < count; ++i)
 	    sort_weight[i] = fabs(tmp_data[i]);
 
 	  sort(sort_weight.begin(), sort_weight.end());
-	  
+
 	  if (num == 0)
 	    {
 	      thr_weight = sort_weight[count * FLAGS_conv_ratio_0];
@@ -780,7 +790,7 @@ void Blob<Dtype>::CalWeightPrun(Dtype** weight, int count, bool prun, int num) c
 	    {
 	      LOG(FATAL) << " Error: Illegal FC ratio ";
 	    }
-	  
+
 	  LOG(INFO) << "blob <CONV>  threshold: " << thr_weight;
 	  for (int i = 0; i < count; ++i)
 	    {
@@ -817,7 +827,7 @@ void Blob<Dtype>::CalWeightPrun(Dtype** weight, int count, bool prun, int num) c
 	  //	  beta = 0.025;
 	  //	  gamma = 0.60;
 	  //	}
-	  //thr = pow(fabs(beta - l2_weight * alpha), gamma); 
+	  //thr = pow(fabs(beta - l2_weight * alpha), gamma);
 	  //LOG(INFO) << "blob <CONV> beta : " << beta << ", gamma: " << gamma <<", threshold: " << thr;
 	  //for (int i = 0; i < count; i++)
 	  //	{
@@ -834,6 +844,66 @@ void Blob<Dtype>::CalWeightPrun(Dtype** weight, int count, bool prun, int num) c
 }
 
 template <>
+void Blob<unsigned int>::encode_weight(BlobProto* proto, unsigned int* weight) {
+  NOT_IMPLEMENTED;
+}
+
+template <>
+void Blob<int>::encode_weight(BlobProto* proto, int* weight) {
+  NOT_IMPLEMENTED;
+}
+
+template <>
+void Blob<float>::encode_weight(BlobProto* proto, float* weight) {
+  // row: count_/FLAGS_sparse_col, col:FLAGS_sparse_col
+  int idx_num = 0;
+
+  // CSC: encode weight
+  for (int col = 0; col < FLAGS_sparse_col; ++col)
+    {
+      proto->add_csc_ptr(idx_num);
+
+      for (int row = 0; row < count_/FLAGS_sparse_col; row++)
+	{
+	  if (weight[row*FLAGS_sparse_col+col] != 0)
+	    {
+	      proto->add_csc_row_idx(row);
+	      proto->add_csc_data(weight[row*FLAGS_sparse_col+col]);
+	      idx_num++;
+	    }
+	}
+    }
+  proto->add_csc_ptr(idx_num);
+
+  LOG(INFO) << " [Info] CSC store float valid data num: " << idx_num;
+}
+
+template <>
+void Blob<double>::encode_weight(BlobProto* proto, double* weight) {
+  // row: count_/FLAGS_sparse_col, col:FLAGS_sparse_col
+  int idx_num = 0;
+
+  // CSC: encode weight
+  for (int col = 0; col < FLAGS_sparse_col; ++col)
+    {
+      proto->add_csc_ptr(idx_num);
+
+      for (int row = 0; row < count_/FLAGS_sparse_col; row++)
+	{
+	  if (weight[row*FLAGS_sparse_col+col] != 0)
+	    {
+	      proto->add_csc_row_idx(row);
+	      proto->add_double_csc_data(weight[row*FLAGS_sparse_col+col]);
+	      idx_num++;
+	    }
+	}
+    }
+  proto->add_csc_ptr(idx_num);
+
+  LOG(INFO) << " [Info] CSC store double valid data num: " << idx_num;
+}
+
+template <>
 void Blob<float>::ToProtoPrun(BlobProto* proto, bool write_diff, bool prun, int num) {
   proto->clear_shape();
   for (int i = 0; i < shape_.size(); ++i) {
@@ -847,14 +917,14 @@ void Blob<float>::ToProtoPrun(BlobProto* proto, bool write_diff, bool prun, int 
   CalWeightPrun(&data_vec, count_, prun, num);
 
   if (FLAGS_sparse_csc && prun)
-    encode_weight(proto, &data_vec);
+    encode_weight(proto, data_vec);
   else
     {
       for (int i = 0; i < count_; ++i) {
 	proto->add_data(data_vec[i]);
       }
     }
-  
+
   if (write_diff) {
     const float* diff_vec = cpu_diff();
     for (int i = 0; i < count_; ++i) {
@@ -873,18 +943,20 @@ void Blob<double>::ToProtoPrun(BlobProto* proto, bool write_diff, bool prun, int
   proto->clear_double_diff();
   //double* data_vec = cpu_data_prun();
   double* data_vec = mutable_cpu_data();
-    
+
   CalWeightPrun(&data_vec, count_, prun, num);
 
   if (FLAGS_sparse_csc && prun)
-    encode_weight(proto, &data_vec);
+    {
+      encode_weight(proto, data_vec);
+    }
   else
     {
       for (int i = 0; i < count_; ++i) {
 	proto->add_double_data(data_vec[i]);
       }
     }
-  
+
   if (write_diff) {
     const double* diff_vec = cpu_diff();
     for (int i = 0; i < count_; ++i) {
@@ -893,85 +965,58 @@ void Blob<double>::ToProtoPrun(BlobProto* proto, bool write_diff, bool prun, int
   }
 }
 
-template<typename Dtype>
-void Blob<Dtype>::encode_weight(BlobProto* proto, Dtype** weight) const {
-  // change blob as 2D-array, row: count_/100, col:100
-  int idx_num = 0;
-  int ptr[101]; 
-  int idx[count_];
-  Dtype data[count_];
-  Dtype* tmp_data = *weight;
-    
-  // CSC: encode weight
-  for (int col = 0; col < 100; ++col)
-    {
-      ptr[col] = idx_num;
-      
-      proto->add_csc_ptr(idx_num);
-      
-      for (int row = 0; row < count_/100; row++)
-	{
-	  if (tmp_data[row*100+col] != 0)
-	    {
-	      data[idx_num] = tmp_data[row*100+col];
-	      idx[idx_num] = row;
-
-	      proto->add_csc_row_idx(row);
-	      proto->add_csc_data(tmp_data[row*100+col]);
-	      
-	      idx_num++;
-	    }
-	}
-    }
-  ptr[100] = idx_num;
-  proto->add_csc_ptr(idx_num);
-  
-  LOG(INFO) << " [Info] valid data num: " << idx_num;
-    
-  for (int i = 0; i < count_; ++i)
-    tmp_data[i] = 0;
-    
-  // write CSC info into blob
-  // write ptr
-  for (int i = 0; i < 101; i++)
-    tmp_data[i] = (Dtype)ptr[i];
-  tmp_data[101] = (Dtype)100;
-    
-  LOG(INFO) << "[Info] weight valid data: " << tmp_data[100] << " invalid: " << tmp_data[101];
-  // write index
-  for(int i = 0; i < idx_num; i++)
-    tmp_data[102 + i] = (Dtype)idx[i];
-  tmp_data[102 + idx_num] = (Dtype)100;
-  
-  // write data
-  for(int i = 0; i < idx_num; i++)
-    tmp_data[102 + idx_num + 1 + i] = data[i];
+template <>
+void Blob<unsigned int>::decode_weight(const BlobProto* proto, unsigned int** weight) const {
+  NOT_IMPLEMENTED;
 }
 
-template<typename Dtype>
-void Blob<Dtype>::decode_weight(Dtype** weight) const {
-  int idx_num = 0;
-  int ptr[count_/2+1];
-  int idx[count_];
-  Dtype data[count_];
-  Dtype* tmp_data = *weight;
-  
-  idx_num = tmp_data[100];
+template <>
+void Blob<int>::decode_weight(const BlobProto* proto, int** weight) const {
+  NOT_IMPLEMENTED;
+}
+
+template <>
+void Blob<float>::decode_weight(const BlobProto* proto, float** weight) const {
+  int row_num = proto->csc_ptr_size();
+  float* tmp_data = *weight;
+
+  CHECK_EQ(FLAGS_sparse_col, (row_num - 1)) << " mismatch data size, need:" <<
+    FLAGS_sparse_col << ", reality: " << (row_num - 1);
+
   for (int i = 0; i < count_; i++)
-    data[i] = 0;
-  
-  for(int i = 0; i < 100; i++)
+    tmp_data[i] = 0;
+
+  for(int i = 0; i < FLAGS_sparse_col; i++)
     {
-      int start = ptr[i];
-      int end = ptr[i+1];
+      int start = proto->csc_ptr(i);
+      int end = proto->csc_ptr(i+1);
       for (int j = start; j < end; j++)
 	{
-	  data[i + 100*idx[j]] = tmp_data[100 + 1 + idx_num + 1 + j];
+	  tmp_data[proto->csc_row_idx(j) * FLAGS_sparse_col + i] = proto->csc_data(j);
 	}
     }
-  
+}
+
+template <>
+void Blob<double>::decode_weight(const BlobProto* proto, double** weight) const {
+  int row_num = proto->csc_ptr_size();
+  double* tmp_data = *weight;
+
+  CHECK_EQ(FLAGS_sparse_col, (row_num - 1)) << " mismatch data size, need:"<<
+    FLAGS_sparse_col <<", reality: " << (row_num - 1);
+
   for (int i = 0; i < count_; i++)
-    tmp_data[i] = data[i];
+    tmp_data[i] = 0;
+
+  for(int i = 0; i < FLAGS_sparse_col; i++)
+    {
+      int start = proto->csc_ptr(i);
+      int end = proto->csc_ptr(i+1);
+      for (int j = start; j < end; j++)
+	{
+	  tmp_data[proto->csc_row_idx(j) * FLAGS_sparse_col + i] = proto->double_csc_data(j);
+	}
+    }
 }
 
 INSTANTIATE_CLASS(Blob);
@@ -979,4 +1024,3 @@ template class Blob<int>;
 template class Blob<unsigned int>;
 
 }  // namespace caffe
-

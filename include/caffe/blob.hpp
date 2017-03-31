@@ -117,11 +117,11 @@ class Blob {
    */
   inline int CanonicalAxisIndex(int axis_index) const {
     CHECK_GE(axis_index, -num_axes())
-        << "axis " << axis_index << " out of range for " << num_axes()
-        << "-D Blob with shape " << shape_string();
+	<< "axis " << axis_index << " out of range for " << num_axes()
+	<< "-D Blob with shape " << shape_string();
     CHECK_LT(axis_index, num_axes())
-        << "axis " << axis_index << " out of range for " << num_axes()
-        << "-D Blob with shape " << shape_string();
+	<< "axis " << axis_index << " out of range for " << num_axes()
+	<< "-D Blob with shape " << shape_string();
     if (axis_index < 0) {
       return axis_index + num_axes();
     }
@@ -138,7 +138,7 @@ class Blob {
   inline int width() const { return LegacyShape(3); }
   inline int LegacyShape(int index) const {
     CHECK_LE(num_axes(), 4)
-        << "Cannot use legacy accessors on Blobs with > 4 axes.";
+	<< "Cannot use legacy accessors on Blobs with > 4 axes.";
     CHECK_LT(index, 4);
     CHECK_GE(index, -4);
     if (index >= num_axes() || index < -num_axes()) {
@@ -169,9 +169,9 @@ class Blob {
     for (int i = 0; i < num_axes(); ++i) {
       offset *= shape(i);
       if (indices.size() > i) {
-        CHECK_GE(indices[i], 0);
-        CHECK_LT(indices[i], shape(i));
-        offset += indices[i];
+	CHECK_GE(indices[i], 0);
+	CHECK_LT(indices[i], shape(i));
+	offset += indices[i];
       }
     }
     return offset;
@@ -228,6 +228,11 @@ class Blob {
   Dtype* mutable_cpu_diff();
   Dtype* mutable_gpu_diff();
   void Update();
+  
+  // for pruning by zhluo
+  void encode_weight(BlobProto* proto, Dtype* weight);
+  void decode_weight(const BlobProto* proto, Dtype** weight) const;
+  
   void FromProto(const BlobProto& proto, bool reshape = true);
   void ToProto(BlobProto* proto, bool write_diff = false) const;
   // for pruning by zhluo
@@ -235,9 +240,7 @@ class Blob {
   void Update_Prun();
   void CalWeightPrun(Dtype** weight, int count, bool prun = false, int num = 0) const;
   void ToProtoPrun(BlobProto* proto, bool write_diff = false, bool prun = false, int num = 0);
-  void encode_weight(BlobProto* proto, Dtype** weight) const;
-  void decode_weight(Dtype** weight) const;
-  
+
   /// @brief Compute the sum of absolute values (L1 norm) of the data.
   Dtype asum_data() const;
   /// @brief Compute the sum of absolute values (L1 norm) of the diff.
