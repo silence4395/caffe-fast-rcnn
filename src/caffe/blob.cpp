@@ -803,8 +803,11 @@ int Blob<Dtype>::CalWeightPrun(Dtype** weight, int count, bool prun, int num) co
     }
   else
     {
-      LOG(FATAL) << " [Error] please set FLAGS_prun_fc or FLAGS_prun_conv valid,"<<
-	" reference \"src/caffe/prun_cfg.cfg\".";
+      if (FLAGS_sparse_csc)
+	LOG(WARNING) << " [Warning] execute sparse routine, Blob use CSC storage pattern.";
+      else
+	LOG(FATAL) << " [Error] please set FLAGS_prun_fc or FLAGS_prun_conv valid,"<<
+	  " reference \"src/caffe/prun_cfg.cfg\".";
     }
   return (count-prun_cnt);
 }
@@ -884,8 +887,12 @@ void Blob<float>::ToProtoPrun(BlobProto* proto, bool write_diff, bool prun, int 
   valid_num = CalWeightPrun(&data_vec, count_, prun, num);
   valid_num = valid_num * 2 + FLAGS_sparse_col + 1;
     
-  if (FLAGS_sparse_csc && prun && (valid_num < count_))
-    encode_weight(proto, data_vec);
+  if ((FLAGS_sparse_csc && prun && (valid_num < count_)) ||
+      (FLAGS_sparse_csc && !FLAGS_prun_fc && !FLAGS_prun_conv))
+    {
+      LOG(INFO) << " sparse ^-^ ";
+      encode_weight(proto, data_vec);
+    }
   else
     {
       for (int i = 0; i < count_; ++i) {
@@ -916,7 +923,8 @@ void Blob<double>::ToProtoPrun(BlobProto* proto, bool write_diff, bool prun, int
   valid_num = CalWeightPrun(&data_vec, count_, prun, num);
   valid_num = valid_num * 2 + FLAGS_sparse_col + 1;
 
-  if (FLAGS_sparse_csc && prun && (valid_num < count_))
+  if ((FLAGS_sparse_csc && prun && (valid_num < count_)) ||
+      (FLAGS_sparse_csc && !FLAGS_prun_fc && !FLAGS_prun_conv))
     {
       encode_weight(proto, data_vec);
     }

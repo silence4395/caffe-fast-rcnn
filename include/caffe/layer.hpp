@@ -501,6 +501,18 @@ void Layer<Dtype>::ToProtoPrun(LayerParameter* param, bool write_diff, int num) 
 	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, false, 0);
 	}
     }
+  else if (FLAGS_sparse_csc)
+    {
+      for (int i = 0; i < blobs_.size(); ++i)
+	{
+	  blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, false, 0);
+	}
+    }
+  else
+    {
+      LOG(FATAL) << " [Error] if you use prun, please first set FLAGS_prun_fc" <<
+	" or FLAGS_prun_conv or FLAGS_prun_csc.";
+    }
 }
 
 }  // namespace caffe

@@ -851,10 +851,12 @@ void Net<Dtype>::ToProto(NetParameter* param, bool write_diff) const {
     //layers_[i]->ToProto(layer_param, write_diff);
  
     // modify for pruning, by zhluo
-    if (FLAGS_prun_fc)
+    if (FLAGS_prun_fc) // pruning FC layers
       layers_[i]->ToProtoPrun(layer_param, write_diff, fc_num);
-    else if (FLAGS_prun_conv)
+    else if (FLAGS_prun_conv) // pruning CONV layers
       layers_[i]->ToProtoPrun(layer_param, write_diff, conv_num);
+    else if (FLAGS_sparse_csc) // only for sparse weight 
+      layers_[i]->ToProtoPrun(layer_param, write_diff, 0);
     else
       layers_[i]->ToProto(layer_param, write_diff);
       
