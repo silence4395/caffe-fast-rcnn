@@ -950,7 +950,7 @@ void Blob<float>::decode_weight(const BlobProto* proto, float** weight) const {
   int row_num = proto->csc_ptr_size();
   float* tmp_data = *weight;
 
-  CHECK_EQ(FLAGS_sparse_col, (row_num - 1)) << " mismatch data size, need:" <<
+  CHECK_EQ(FLAGS_sparse_col, (row_num - 1)) << " mismatch data size, need: " <<
     FLAGS_sparse_col << ", reality: " << (row_num - 1);
 
   for (int i = 0; i < count_; i++)
@@ -972,7 +972,7 @@ void Blob<double>::decode_weight(const BlobProto* proto, double** weight) const 
   int row_num = proto->csc_ptr_size();
   double* tmp_data = *weight;
 
-  CHECK_EQ(FLAGS_sparse_col, (row_num - 1)) << " mismatch data size, need:"<<
+  CHECK_EQ(FLAGS_sparse_col, (row_num - 1)) << " mismatch data size, need: "<<
     FLAGS_sparse_col <<", reality: " << (row_num - 1);
 
   for (int i = 0; i < count_; i++)
