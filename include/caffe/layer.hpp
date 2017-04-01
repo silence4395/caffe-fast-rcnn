@@ -486,9 +486,9 @@ void Layer<Dtype>::ToProtoPrun(LayerParameter* param, bool write_diff, int num) 
       for (int i = 0; i < blobs_.size(); ++i)
 	{
 	  if ((i == 0) && !strcmp(param->type().c_str(), "InnerProduct")) // i = 0: weight; i = 1:bias
-	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, true, num);
+	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, true, num, FLAGS_idx_diff_fc);
 	  else
-	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, false, 0);
+	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, false, 0, 0);
 	}
     }
   else if (FLAGS_prun_conv)
@@ -496,16 +496,21 @@ void Layer<Dtype>::ToProtoPrun(LayerParameter* param, bool write_diff, int num) 
       for (int i = 0; i < blobs_.size(); ++i)
 	{
 	  if ((i == 0) && !strcmp(param->type().c_str(), "Convolution"))
-	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, true, num);
+	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, true, num, FLAGS_idx_diff_conv);
 	  else
-	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, false, 0);
+	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, false, 0, 0);
 	}
     }
   else if (FLAGS_sparse_csc)
     {
       for (int i = 0; i < blobs_.size(); ++i)
 	{
-	  blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, false, 0);
+	  if ((i == 0) && !strcmp(param->type().c_str(), "Convolution"))
+	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, false, 0, FLAGS_idx_diff_conv);
+	  else if ((i == 0) && !strcmp(param->type().c_str(), "InnerProduct"))
+	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, false, 0, FLAGS_idx_diff_fc);
+	  else // bias
+	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, false, 0, 0);
 	}
     }
   else

@@ -230,7 +230,7 @@ class Blob {
   void Update();
   
   // for pruning by zhluo
-  void encode_weight(BlobProto* proto, Dtype* weight);
+  void encode_weight(BlobProto* proto, Dtype* weight, int diff_num = 0);
   void decode_weight(const BlobProto* proto, Dtype** weight) const;
   
   void FromProto(const BlobProto& proto, bool reshape = true);
@@ -239,7 +239,8 @@ class Blob {
   Dtype* cpu_data_prun() const;
   void Update_Prun();
   int CalWeightPrun(Dtype** weight, int count, bool prun = false, int num = 0) const;
-  void ToProtoPrun(BlobProto* proto, bool write_diff = false, bool prun = false, int num = 0);
+  void ToProtoPrun(BlobProto* proto, bool write_diff = false, bool prun = false,
+		   int num = 0, int sparse_diff_num = 0);
 
   /// @brief Compute the sum of absolute values (L1 norm) of the data.
   Dtype asum_data() const;

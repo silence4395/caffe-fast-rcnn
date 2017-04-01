@@ -34,4 +34,6 @@ DECLARE_bool(prun_retrain);
 DECLARE_bool(sparse_csc);
 DECLARE_int32(prun_fc_num);
 DECLARE_int32(sparse_col);
+DECLARE_int32(idx_diff_conv);
+DECLARE_int32(idx_diff_fc);
 #endif  // PRUN_CFG_HPP_
