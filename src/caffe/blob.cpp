@@ -677,7 +677,7 @@ int Blob<Dtype>::CalWeightPrun(Dtype** weight, int count, bool prun, int num) co
   Dtype* tmp_data = *weight;
   Dtype thr_weight = 0;
   vector<Dtype> sort_weight(count);
-  
+
   if (FLAGS_prun_fc)
     {
       //Dtype* tmp_data = *weight;
@@ -828,7 +828,7 @@ void Blob<float>::encode_weight(BlobProto* proto, float* weight, int diff_num) {
   int idx_num = 0;
   int base_idx = 0;
   int thr_diff = 1 << diff_num;
-  
+
   // CSC: encode weight(storage index diff)
   for (int col = 0; col < FLAGS_sparse_col; ++col)
     {
@@ -861,7 +861,14 @@ void Blob<float>::encode_weight(BlobProto* proto, float* weight, int diff_num) {
 	}
     }
   proto->add_csc_ptr(idx_num);
-
+  
+  if (Flags_quan_enable)
+    {
+      float* csc_data;
+      csc_data = malloc(sizeof(float) * proto->csc_data_size());
+      weight_quan(proto, csc_data);
+    }
+  
   LOG(INFO) << " [Info] CSC store float valid data num: " << idx_num;
 }
 
@@ -919,10 +926,10 @@ void Blob<float>::ToProtoPrun(BlobProto* proto, bool write_diff, bool prun, int 
   //float* data_vec = cpu_data_prun();
   float* data_vec = mutable_cpu_data();
   int valid_num = 0;
-  
+
   valid_num = CalWeightPrun(&data_vec, count_, prun, num);
   valid_num = valid_num * 2 + FLAGS_sparse_col + 1;
-    
+
   if (((FLAGS_sparse_csc && prun && (valid_num < count_)) ||
        (FLAGS_sparse_csc && !FLAGS_prun_fc && !FLAGS_prun_conv)) && (sparse_diff_num != 0))
     {
@@ -954,7 +961,7 @@ void Blob<double>::ToProtoPrun(BlobProto* proto, bool write_diff, bool prun, int
   //double* data_vec = cpu_data_prun();
   double* data_vec = mutable_cpu_data();
   int valid_num = 0;
-		      
+
   valid_num = CalWeightPrun(&data_vec, count_, prun, num);
   valid_num = valid_num * 2 + FLAGS_sparse_col + 1;
 
@@ -1014,7 +1021,7 @@ void Blob<float>::decode_weight(const BlobProto* proto, float** weight) const {
 		  base_idx += proto->csc_row_idx(reality_idx);
 		  reality_idx++;
 		}while(proto->csc_data(reality_idx) == 0);
-	      
+
 	      base_idx += proto->csc_row_idx(reality_idx);
 	      tmp_data[base_idx * FLAGS_sparse_col + i] = proto->csc_data(reality_idx);
 	      reality_idx++;
@@ -1035,7 +1042,7 @@ void Blob<double>::decode_weight(const BlobProto* proto, double** weight) const 
   double* tmp_data = *weight;
   int base_idx = 0;
   int reality_idx = 0;
-  
+
   CHECK_EQ(FLAGS_sparse_col, (row_num - 1)) << " mismatch data size, need: "<<
     FLAGS_sparse_col <<", reality: " << (row_num - 1);
 
@@ -1055,7 +1062,7 @@ void Blob<double>::decode_weight(const BlobProto* proto, double** weight) const 
 		  base_idx += proto->csc_row_idx(reality_idx);
 		  reality_idx++;
 		}while(proto->double_csc_data(reality_idx) == 0);
-	      
+
 	      base_idx += proto->csc_row_idx(reality_idx);
 	      tmp_data[base_idx * FLAGS_sparse_col + i] = proto->double_csc_data(reality_idx);
 	      reality_idx++;
@@ -1068,6 +1075,138 @@ void Blob<double>::decode_weight(const BlobProto* proto, double** weight) const 
 	    }
 	}
     }
+}
+
+template <typedef Dtype>
+Dtype Blob<Dtype>::weight_quan(BlobProto* proto, Dtype* weight) {
+  Dtype max_weight = 0;
+  Dtype min_weight = 10000;
+
+  quan_label = malloc(sizeof(int) * count_);
+  for (int i = 0; i < count_; ++i)
+    {
+      if (max_weight < weight[i])
+	max_weight = weight[i];
+      if (min_weight > weight[i])
+	min_weight = weight[i];
+    }
+
+  int centroid_num = 0;
+  int* quan_data_num;
+  Dtype* quan_data;
+  int* quan_label;
+  Dtype* last_quan_data;
+  int* last_quan_label;
+  int best_k = 0;
+  Dtype wcss = 0;
+  Dtype last_wcss = 10000000; // WCSS: within-cluster sum of squares
+  Dtype global_min_wcss = 10000000;
+
+  last_quan_data = malloc(sizeof(Dtype) * power(2, Flags_quan_k_max));
+  last_quan_label = malloc(sizeof(int) * power(2, Flags_quan_k_max));
+      
+  for (int cluster_num = 4; cluster_num < Flags_quan_k_max; ++cluster_num)
+    {
+      centroid_num = power(2, cluster_num);
+      quan_data = malloc(sizeof(Dtype) * centroid_num);
+      quan_data_num = malloc(sizeof(int) * centroid_num);
+
+      // initial centroid value
+      for (int centroid_idx = 0; centroid_idx < centroid_num; ++centroid_idx)
+	{
+	  quan_data[centroid_idx] = min_weight + (max_weight - min_weight)/centroid_num*centroid_idx;
+	  quan_data_num[centroid_idx] = 0;
+	}
+
+      // iteration calculate centroid
+      for (int iter_num = 0; iter_num < Flags_quan_max_iter; ++iter_num)
+	{
+	  // use k-means calculate centroid
+	  wcss = kmeans(weight, &quan_data, &quan_data_num, &quan_label, centroid_num);
+	  
+	  Dtype condition = fabs(last_wcss - wcss);
+	  last_wcss = wcss;
+	  if (condition < 0.0001) // last_wcss == wcss, finish iteration
+	    break;
+	}
+
+      if (global_min_wcss > last_wcss)
+	{
+	  global_min_wcss = last_wcss;
+	  best_k = cluster_num;
+	  memset(last_quan_data, 0, sizeof(Dtype) * (centroid_num-1));
+	  memset(last_quan_label, 0, sizeof(int) * (centroid_num-1));
+	  memcpy(last_quan_data, quan_data, centroid_num);
+	  memcpy(last_quan_label, quan_label, centroid_num);
+	}
+    }
+  
+  // write quantization data into blob
+  quan_to_blob(proto, last_quan_data, last_quan_label, best_k);
+
+  free(quan_data);
+  free(quan_label);
+  free(last_quan_data);
+  free(last_quan_label);
+}
+
+template <typename Dtype>
+Dtype Blob<Dtype>::kmeans(Dtype* weight, Dtype** data, int** data_num, int** label, int centroid_num){
+  Dtype min_distance = 10000;
+  Dtype tmp_distance = 0;
+  Dtype wcss = 0;
+  int* centroid_idx = *label;
+  int* centroid_data_num = *data_num;
+  Dtype* centroid_data = *data;
+
+  for (int weight_idx = 0; weight_idx < count_; ++weight_idx)
+    {
+      min_distance = 10000;
+      tmp_distance = 0;
+      for (int idx = 0; idx < centroid_num; ++idx)
+	{
+	  tmp_distance = fabs(weight[weight_idx] - centroid_data[idx]);
+	  if (min_distance > tmp_distance)
+	    {
+	      min_distance = tmp_distance;
+	      centroid_idx[weight_idx] = idx;
+	    }
+	}
+    }
+
+  // use the average of every cluster weights update centroid
+  for (int idx = 0; idx < centroid_num; ++idx)
+    centroid_data[idx] = 0;
+  for (int weight_idx = 0; weight_idx < count_; ++weight_idx)
+    {
+      centroid_data[centroid_idx[weight_idx]] += weight[weight_idx];
+      centroid_data_num[centroid_idx[weight_idx]]++;
+    }
+  for (int idx = 0; idx < centroid_num; ++idx)
+    centroid_data[idx] = centroid_data[idx]/centroid_data_num[idx];
+
+  // calculate WCSS
+  for (int weight_idx = 0; weight_idx < count_; ++weight_idx)
+    wcss = power(fabs(weight[weight_idx] - centroid_data[centroid_idx[weight_idx]]), 2);
+  return sqrt(wcss);
+}
+
+template <>
+void Blob<float>::quan_to_blob(BlobProto* proto, float* quan_data, int* label, int best_k){
+  int cluster_num = power(2, best_k);
+  
+  for (int cluster_idx = 0; cluster_idx < cluster_num; ++cluster_idx)
+    proto->add_quan_data(quan_data[cluster_idx]);
+  
+  // TODO: rewrite csc_data 
+}
+
+template <>
+void Blob<double>::quan_to_blob(BlobProto* proto, double* quan_data, int* label, int best_k){
+  int cluster_num = power(2, best_k);
+  
+  for (int cluster_idx = 0; cluster_idx < cluster_num; ++cluster_idx)
+    proto->add_double_quan_data(quan_data[cluster_idx]);
 }
 
 INSTANTIATE_CLASS(Blob);

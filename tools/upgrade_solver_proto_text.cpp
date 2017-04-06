@@ -33,6 +33,9 @@ DEFINE_double(conv_ratio_2, 0, "Optional; conv layer prun ratio");
 DEFINE_double(fc_ratio_0, 0, "Optional; fc layer prun ratio");
 DEFINE_double(fc_ratio_1, 0, "Optional; fc layer prun ratio");
 DEFINE_double(fc_ratio_2, 0, "Optional; fc layer prun ratio");
+DEFINE_int32(quan_enable, 0, "Optional; enable quantization");
+DEFINE_int32(quan_k_max, 8, "Optional; 2^k clusters");
+DEFINE_int32(quan_max_iter, 256, "Optional; k-mean max iteration num");
 
 int main(int argc, char** argv) {
   FLAGS_alsologtostderr = 1;  // Print output to stderr (while still logging)

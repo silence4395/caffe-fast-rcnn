@@ -6,9 +6,9 @@
 //        tools/caffe.cpp
 //        tools/extract_features.cpp
 //        tools/upgrade_net_proto_text.cpp
-//        examples/mnist/convert_mnist_data.cpp
 //        tools/convert_imageset.cpp
 //        tools/compute_image_mean.cpp
+//        examples/mnist/convert_mnist_data.cpp
 //        examples/siamese/convert_mnist_siamese_data.cpp
 //        examples/cifar10/convert_cifar_data.cpp
 //        examples/cpp_classification/classification.cpp
@@ -36,4 +36,7 @@ DECLARE_int32(prun_fc_num);
 DECLARE_int32(sparse_col);
 DECLARE_int32(idx_diff_conv);
 DECLARE_int32(idx_diff_fc);
+DECLARE_int32(quan_enable);
+DECLARE_int32(quan_k_max);
+DECLARE_int32(quan_max_iter);
 #endif  // PRUN_CFG_HPP_

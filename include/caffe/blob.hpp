@@ -237,6 +237,9 @@ class Blob {
   void ToProto(BlobProto* proto, bool write_diff = false) const;
   // for pruning by zhluo
   Dtype* cpu_data_prun() const;
+  void quan_to_blob(BlobProto* proto, Dtype* quan_data, int* label, int best_k);
+  void weight_quan(BlobProto* proto, Dtype* weight);
+  Dtype kmeans(Dtype* weight, Dtype** data, int** data_num, int** label, int centroid_num = 0);
   void Update_Prun();
   int CalWeightPrun(Dtype** weight, int count, bool prun = false, int num = 0) const;
   void ToProtoPrun(BlobProto* proto, bool write_diff = false, bool prun = false,
