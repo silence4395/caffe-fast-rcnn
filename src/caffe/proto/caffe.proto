@@ -25,9 +25,9 @@ message BlobProto {
   repeated int32 csc_row_idx = 11 [packed = true];
   repeated float csc_data = 12 [packed = true];
   repeated double double_csc_data = 13 [packed = true];
+  repeated int32 csc_quan_data = 14 [packed = true];
   
   // weight quantization, by zhluo
-  repeated int32 quan_label = 14 [packed = true];
   repeated float quan_data = 15 [packed = true];
   repeated double double_quan_data = 16 [packed = true];
 }
