@@ -1,5 +1,7 @@
 #include <climits>
 #include <vector>
+#include <limits>
+#include <iostream>
 
 #include "caffe/blob.hpp"
 #include "caffe/common.hpp"
@@ -934,6 +936,7 @@ void Blob<float>::ToProtoPrun(BlobProto* proto, bool write_diff, bool prun, int 
 	  int tmp_idx = 0;
 	  float* valid_data;
 	  valid_data = (float *)malloc(sizeof(float) * valid_num);
+	  assert(valid_data != NULL);
 
 	  for (int idx = 0; idx < proto->csc_data_size(); ++idx)
 	    {
@@ -1030,6 +1033,7 @@ void Blob<float>::decode_weight(const BlobProto* proto, float** weight) const {
       int end = proto->csc_ptr(i+1);
       for (int j = start; j < end; j++)
 	{
+	  // decode CSC + quantization
 	  if (FLAGS_quan_enable)
 	    {
 	      if (proto->csc_quan_data(reality_idx) == 0)
@@ -1055,6 +1059,7 @@ void Blob<float>::decode_weight(const BlobProto* proto, float** weight) const {
 	    }
 	  else
 	    {
+	      // decode CSC
 	      if (proto->csc_data(reality_idx) == 0)
 		{
 		  do
@@ -1097,6 +1102,7 @@ void Blob<double>::decode_weight(const BlobProto* proto, double** weight) const 
       int end = proto->csc_ptr(i+1);
       for (int j = start; j < end; j++)
 	{
+	  // decode CSC + quantization
 	  if (FLAGS_quan_enable)
 	    {
 	      if (proto->csc_quan_data(reality_idx) == 0)
@@ -1122,6 +1128,7 @@ void Blob<double>::decode_weight(const BlobProto* proto, double** weight) const 
 	    }
 	  else
 	    {
+	      // decode CSC
 	      if (proto->double_csc_data(reality_idx) == 0)
 		{
 		  do
@@ -1147,8 +1154,8 @@ void Blob<double>::decode_weight(const BlobProto* proto, double** weight) const 
 
 template <typename Dtype>
 void Blob<Dtype>::weight_quan(BlobProto* proto, Dtype* weight, int num) {
-  Dtype max_weight = 0;
-  Dtype min_weight = 10000;
+  Dtype max_weight = std::numeric_limits<Dtype>::min();
+  Dtype min_weight = std::numeric_limits<Dtype>::max();
 
   for (int i = 0; i < num; ++i)
     {
@@ -1159,25 +1166,37 @@ void Blob<Dtype>::weight_quan(BlobProto* proto, Dtype* weight, int num) {
     }
 
   int centroid_num = 0;
-  int* quan_data_num;
-  Dtype* quan_data;
-  int* quan_label;
-  Dtype* last_quan_data;
+  int* quan_data_num; // share centroid num (a centroid VS. a lost of weights)
+  Dtype* quan_data; // centroid
+  Dtype* local_last_qaun;
+  int* quan_label; // for weight index centroid
+  Dtype* last_quan_data; // record last iter info
   int* last_quan_label;
-  int best_k = 0;
-  Dtype wcss = 0;
-  Dtype last_wcss = 10000000; // WCSS: within-cluster sum of squares
-  Dtype global_min_wcss = 10000000;
+  int best_k = 0; //
+  Dtype wcss = 0; // WCSS: within-cluster sum of squares
+  Dtype last_wcss = std::numeric_limits<Dtype>::max();
+  Dtype global_min_wcss = std::numeric_limits<Dtype>::max();
 
   quan_label = (int *)malloc(sizeof(int) * num);
+  assert(quan_label != NULL);
   last_quan_data = (Dtype *)malloc(sizeof(Dtype) * (1 << FLAGS_quan_k_max));
+  assert(last_quan_data != NULL);
   last_quan_label = (int *)malloc(sizeof(int) * num);
+  assert(last_quan_label != NULL);
+  local_last_qaun = (Dtype *)malloc(sizeof(Dtype) * (1 << FLAGS_quan_k_max));
+  assert(local_last_qaun != NULL);
 
-  for (int cluster_num = 4; cluster_num < FLAGS_quan_k_max+1; ++cluster_num)
+  memset(last_quan_data, 0, sizeof(Dtype) * (1 << FLAGS_quan_k_max));
+  memset(last_quan_label, 0, sizeof(int) * num);
+  memset(local_last_qaun, 0, sizeof(Dtype) * (1 << FLAGS_quan_k_max));
+
+  for (int cluster_num = 1/*4*/; cluster_num < (FLAGS_quan_k_max+1); ++cluster_num)
     {
       centroid_num = (1 << cluster_num);
       quan_data = (Dtype *)malloc(sizeof(Dtype) * centroid_num);
+      assert(quan_data != NULL);
       quan_data_num = (int *)malloc(sizeof(int) * centroid_num);
+      assert(quan_data_num != NULL);
 
       LOG(INFO) << " [Info] cluster: " << cluster_num << " centroid num: " << centroid_num;
 
@@ -1195,37 +1214,40 @@ void Blob<Dtype>::weight_quan(BlobProto* proto, Dtype* weight, int num) {
 	  // use k-means calculate centroid
 	  wcss = kmeans(weight, num, &quan_data, &quan_data_num, &quan_label, centroid_num);
 
-	  if (last_wcss == wcss)
-	    break;
+	  //bool stable = true;
+	  //for (int k = 0; k < centroid_num; ++k)
+	  //  {
+	  //    if (quan_data[k] != local_last_qaun[k])
+	  //	{
+	  //	  stable = false;
+	  //	  continue;
+	  //	}
+	  //  }
+	  //if (stable)
+	  //  break;
 
+	  if (last_wcss == wcss)
+	   break;
 	  last_wcss = wcss;
 	}
 
       LOG(INFO) << "[Info] iter: " << iter_num-1 << " max iter: " << FLAGS_quan_max_iter;
-      LOG(INFO) << " WCSS: " << last_wcss;
+      LOG(INFO) << " WCSS: " << wcss;
 
-      //for (int i = 0; i < num; i++)
-      //  LOG(INFO) << " =>=>=>=> DATA: " << quan_label[i];
-      //  for (int i = 0; i < centroid_num; ++i)
-      //LOG(INFO) << " index: " << i << " toatl num: " << quan_data_num[i] << " data: " << quan_data[i];
-
-      if (global_min_wcss > last_wcss)
+      if (global_min_wcss > wcss)
 	{
-	  global_min_wcss = last_wcss;
+	  global_min_wcss = wcss;
 	  best_k = cluster_num;
 	  memset(last_quan_data, 0, sizeof(Dtype) * centroid_num);
 	  memset(last_quan_label, 0, sizeof(int) * num);
-	  memcpy(last_quan_data, quan_data, centroid_num);
-	  memcpy(last_quan_label, quan_label, num);
+	  memcpy(last_quan_data, quan_data, sizeof(Dtype) * centroid_num);
+	  memcpy(last_quan_label, quan_label, sizeof(int) * num);
 	}
     }
 
   LOG(INFO) << " [Info] best K: " << best_k;
 
   // write quantization data into blob
-  //for (int i = 0; i < num; ++i)
-  // LOG(INFO) << " ^-^ index: " << i << " label: " << last_quan_label[i];
-
   quan_to_blob(proto, last_quan_data, last_quan_label, best_k, num);
 
   free(quan_data);
@@ -1237,7 +1259,7 @@ void Blob<Dtype>::weight_quan(BlobProto* proto, Dtype* weight, int num) {
 template <typename Dtype>
 Dtype Blob<Dtype>::kmeans(Dtype* weight, int weight_num, Dtype** data, int** data_num,
 			  int** label, int centroid_num){
-  Dtype min_distance = 10000;
+  Dtype min_distance = std::numeric_limits<Dtype>::max();
   Dtype tmp_distance = 0;
   Dtype wcss = 0;
   int* centroid_idx = *label;
@@ -1246,7 +1268,7 @@ Dtype Blob<Dtype>::kmeans(Dtype* weight, int weight_num, Dtype** data, int** dat
 
   for (int weight_idx = 0; weight_idx < weight_num; ++weight_idx)
     {
-      min_distance = 10000;
+      min_distance = std::numeric_limits<Dtype>::max();
       tmp_distance = 0;
       for (int idx = 0; idx < centroid_num; ++idx)
 	{
@@ -1271,14 +1293,19 @@ Dtype Blob<Dtype>::kmeans(Dtype* weight, int weight_num, Dtype** data, int** dat
       centroid_data_num[centroid_idx[weight_idx]]++;
     }
   for (int idx = 0; idx < centroid_num; ++idx)
-    centroid_data[idx] = centroid_data[idx]/centroid_data_num[idx];
+    if (centroid_data_num[idx] != 0)
+      centroid_data[idx] = centroid_data[idx]/centroid_data_num[idx];
 
   // calculate WCSS
-  for (int weight_idx = 0; weight_idx < weight_num; ++weight_idx)
-    wcss = fabs(weight[weight_idx] - centroid_data[centroid_idx[weight_idx]]) *
-      fabs(weight[weight_idx] - centroid_data[centroid_idx[weight_idx]]);
-
-  return sqrt(wcss);
+  for (int i = 0; i < centroid_num; ++i)
+    for (int j = 0; j <= i/*centroid_num*/; ++j)
+      wcss += fabs(centroid_data[j] - centroid_data[i]) * fabs(centroid_data[j] - centroid_data[i]);
+   
+  //for (int weight_idx = 0; weight_idx < weight_num; ++weight_idx)
+  //  wcss += fabs(weight[weight_idx] - centroid_data[centroid_idx[weight_idx]]) *
+  //    fabs(weight[weight_idx] - centroid_data[centroid_idx[weight_idx]]);
+  
+  return wcss;
 }
 
 template <>
