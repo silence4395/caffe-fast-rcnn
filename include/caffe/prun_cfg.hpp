@@ -37,6 +37,9 @@ DECLARE_int32(sparse_col);
 DECLARE_int32(idx_diff_conv);
 DECLARE_int32(idx_diff_fc);
 DECLARE_int32(quan_enable);
+DECLARE_double(quan_lr);
+DECLARE_int32(quan_k_min);
 DECLARE_int32(quan_k_max);
 DECLARE_int32(quan_max_iter);
+DECLARE_bool(quan_retrain);
 #endif  // PRUN_CFG_HPP_

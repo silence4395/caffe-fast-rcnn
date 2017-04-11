@@ -949,7 +949,7 @@ void Blob<float>::ToProtoPrun(BlobProto* proto, bool write_diff, bool prun, int 
 
 	  if (tmp_idx != valid_num)
 	    LOG(FATAL) << " [Error] Index exceed boundary.( " << tmp_idx << " vs " << valid_num << " )";
-
+	  
 	  weight_quan(proto, valid_data, valid_num);
 	  free(valid_data);
 	}
@@ -1168,7 +1168,7 @@ void Blob<Dtype>::weight_quan(BlobProto* proto, Dtype* weight, int num) {
   int centroid_num = 0;
   int* quan_data_num; // share centroid num (a centroid VS. a lost of weights)
   Dtype* quan_data; // centroid
-  Dtype* local_last_qaun;
+  Dtype* local_last_quan;
   int* quan_label; // for weight index centroid
   Dtype* last_quan_data; // record last iter info
   int* last_quan_label;
@@ -1183,14 +1183,14 @@ void Blob<Dtype>::weight_quan(BlobProto* proto, Dtype* weight, int num) {
   assert(last_quan_data != NULL);
   last_quan_label = (int *)malloc(sizeof(int) * num);
   assert(last_quan_label != NULL);
-  local_last_qaun = (Dtype *)malloc(sizeof(Dtype) * (1 << FLAGS_quan_k_max));
-  assert(local_last_qaun != NULL);
+  local_last_quan = (Dtype *)malloc(sizeof(Dtype) * (1 << FLAGS_quan_k_max));
+  assert(local_last_quan != NULL);
 
   memset(last_quan_data, 0, sizeof(Dtype) * (1 << FLAGS_quan_k_max));
   memset(last_quan_label, 0, sizeof(int) * num);
-  memset(local_last_qaun, 0, sizeof(Dtype) * (1 << FLAGS_quan_k_max));
+  memset(local_last_quan, 0, sizeof(Dtype) * (1 << FLAGS_quan_k_max));
 
-  for (int cluster_num = 1/*4*/; cluster_num < (FLAGS_quan_k_max+1); ++cluster_num)
+  for (int cluster_num = FLAGS_quan_k_min/*4*/; cluster_num < (FLAGS_quan_k_max+1); ++cluster_num)
     {
       centroid_num = (1 << cluster_num);
       quan_data = (Dtype *)malloc(sizeof(Dtype) * centroid_num);
@@ -1217,7 +1217,7 @@ void Blob<Dtype>::weight_quan(BlobProto* proto, Dtype* weight, int num) {
 	  //bool stable = true;
 	  //for (int k = 0; k < centroid_num; ++k)
 	  //  {
-	  //    if (quan_data[k] != local_last_qaun[k])
+	  //    if (quan_data[k] != local_last_quan[k])
 	  //	{
 	  //	  stable = false;
 	  //	  continue;
@@ -1346,10 +1346,29 @@ void Blob<float>::quan_to_blob(BlobProto* proto, float* quan_data, int* label, i
 
 template <>
 void Blob<double>::quan_to_blob(BlobProto* proto, double* quan_data, int* label, int best_k, int num){
+  int csc_data_idx = 0;
+  int max_data_idx = proto->double_csc_data_size();
   int cluster_num = (1 << best_k);
 
   for (int cluster_idx = 0; cluster_idx < cluster_num; ++cluster_idx)
     proto->add_double_quan_data(quan_data[cluster_idx]);
+
+  // TODO: rewrite csc_data
+  proto->clear_double_csc_data();
+  for (int idx = 0; idx < num; ++idx)
+    {
+      while(proto->double_csc_data(csc_data_idx) == 0)
+	{
+	  proto->add_csc_quan_data(0);
+	  csc_data_idx++;
+	}
+
+      proto->add_csc_quan_data(label[idx]+1);
+      csc_data_idx++;
+    }
+
+  if (csc_data_idx != max_data_idx)
+    LOG(FATAL) << " [Error] Index exceed boundary.";
 }
 
 INSTANTIATE_CLASS(Blob);
