@@ -579,14 +579,18 @@ void Blob<float>::ToProto(BlobProto* proto, bool write_diff) const {
   //}  // namespace caffe
 
 // for pruning by zhluo
-template <>
-void Blob<float>::Update_Prun() {
+
+template <> void Blob<unsigned int>::Update_Prun() { NOT_IMPLEMENTED; }
+template <> void Blob<int>::Update_Prun() { NOT_IMPLEMENTED; }
+
+template <typename Dtype>
+void Blob<Dtype>::Update_Prun() {
   // We will perform update based on where the data is located.
-  float *diff_val_cpu = (float*)diff_->cpu_data();
-  float *weight_val_cpu = static_cast<float*>(data_->mutable_cpu_data());
+  Dtype *diff_val_cpu = (Dtype*)diff_->cpu_data();
+  Dtype *weight_val_cpu = static_cast<Dtype*>(data_->mutable_cpu_data());
 #ifndef CPU_ONLY
-  float *diff_val_gpu = (float*)diff_->gpu_data();
-  float *weight_val_gpu = static_cast<float*>(data_->mutable_cpu_data());
+  Dtype *diff_val_gpu = (Dtype*)diff_->gpu_data();
+  Dtype *weight_val_gpu = static_cast<Dtype*>(data_->mutable_cpu_data());
 #endif
 
   switch (data_->head()) {
@@ -598,8 +602,8 @@ void Blob<float>::Update_Prun() {
 	  {
 	    diff_val_cpu[i] = 0;
 	  }
-      caffe_axpy<float>(count_, float(-1),
-			static_cast<const float*>(diff_val_cpu),
+      caffe_axpy<Dtype>(count_, Dtype(-1),
+			static_cast<const Dtype*>(diff_val_cpu),
 			weight_val_cpu);
       break;
     }
@@ -613,8 +617,8 @@ void Blob<float>::Update_Prun() {
 	  {
 	    diff_val_gpu[i] = 0;
 	  }
-      caffe_gpu_axpy<float>(count_, float(-1),
-			    static_cast<const float*>(diff_val_gpu),
+      caffe_gpu_axpy<Dtype>(count_, Dtype(-1),
+			    static_cast<const Dtype*>(diff_val_gpu),
 			    weight_val_gpu);
 #else
       NO_GPU;
@@ -626,28 +630,35 @@ void Blob<float>::Update_Prun() {
   }
 }
 
-template <>
-void Blob<double>::Update_Prun() {
+template <typename Dtype>
+void Blob<Dtype>::Update_Quan(int* quan_data) {
   // We will perform update based on where the data is located.
-  double *diff_val_cpu = (double*)diff_->cpu_data();
-  double *weight_val_cpu = static_cast<double*>(data_->mutable_cpu_data());
+  Dtype *diff_val_cpu = (Dtype*)diff_->cpu_data();
+  Dtype *weight_val_cpu = static_cast<Dtype*>(data_->mutable_cpu_data());
 #ifndef CPU_ONLY
-  double *diff_val_gpu = (double*)diff_->gpu_data();
-  double *weight_val_gpu = static_cast<double*>(data_->mutable_cpu_data());
+  Dtype *diff_val_gpu = (Dtype*)diff_->gpu_data();
+  Dtype *weight_val_gpu = static_cast<Dtype*>(data_->mutable_cpu_data());
 #endif
 
   switch (data_->head()) {
   case SyncedMemory::HEAD_AT_CPU:
     // perform computation on CPU
     {
-      for (int i = 0; i < count_; i++)
-	if (weight_val_cpu[i] == 0)
-	  {
-	    diff_val_cpu[i] = 0;
-	  }
-      caffe_axpy<double>(count_, double(-1),
-			 static_cast<const double*>(diff_val_cpu),
-			 weight_val_cpu);
+      int centroid_max_num = 1 << FLAGS_quan_k_max;
+      Dtype diff_sum[centroid_max_num];
+      for (int i = 0; i < centroid_max_num; ++i)
+	diff_sum[i] = 0.f;
+      
+      for (int i = 0; i < count_; ++i)
+	if (weight_val_cpu[i] != 0)
+	  diff_sum[quan_data[i]-1] += diff_val_cpu[i];
+      
+      for (int i = 0; i < centroid_max_num; ++i)
+	diff_sum[i] = diff_sum[i] * FLAGS_quan_lr;
+      
+      for (int i = 0; i < count_; ++i)
+	if (weight_val_cpu[i] != 0)
+	  weight_val_cpu[i] -= diff_sum[quan_data[i]-1];
       break;
     }
   case SyncedMemory::HEAD_AT_GPU:
@@ -655,14 +666,22 @@ void Blob<double>::Update_Prun() {
     {
 #ifndef CPU_ONLY
       // perform computation on GPU
-      for (int i = 0; i < count_; i++)
-	if (weight_val_gpu[i] == 0)
-	  {
-	    diff_val_gpu[i] = 0;
-	  }
-      caffe_gpu_axpy<double>(count_, double(-1),
-			     static_cast<const double*>(diff_val_gpu),
-			     weight_val_gpu);
+      int centroid_max_num = 1 << FLAGS_quan_k_max;
+      Dtype diff_sum[centroid_max_num];
+
+      for (int i = 0; i < centroid_max_num; ++i)
+	diff_sum[i] = 0.f;
+      
+      for (int i = 0; i < count_; ++i)
+	if (weight_val_gpu[i] != 0)
+	  diff_sum[quan_data[i]-1] += diff_val_gpu[i];
+      
+      for (int i = 0; i < centroid_max_num; ++i)
+	diff_sum[i] = diff_sum[i] * FLAGS_quan_lr;
+      
+      for (int i = 0; i < count_; ++i)
+	if (weight_val_gpu[i] != 0)
+	  weight_val_gpu[i] -= diff_sum[quan_data[i]-1];
 #else
       NO_GPU;
 #endif
@@ -863,6 +882,16 @@ void Blob<float>::encode_weight(BlobProto* proto, float* weight, int diff_num) {
 	}
     }
   proto->add_csc_ptr(idx_num);
+  
+  // modify for quantization, by zhluo 4/12/2017
+  if (FLAGS_quan_enable)
+    {
+      for (int i = 0; i < count_; ++i)
+	if (weight[i] == 0)
+	  proto->add_quan_label(0);
+	else
+	  proto->add_quan_label(1);
+    }
 
   LOG(INFO) << " [Info] CSC store float valid data num: " << idx_num;
 }
@@ -907,6 +936,16 @@ void Blob<double>::encode_weight(BlobProto* proto, double* weight, int diff_num)
     }
   proto->add_csc_ptr(idx_num);
 
+  // modify for quantization, by zhluo 4/12/2017
+  if (FLAGS_quan_enable)
+    {
+      for (int i = 0; i < count_; ++i)
+	if (weight[i] == 0)
+	  proto->add_quan_label(0);
+	else
+	  proto->add_quan_label(1);
+    }
+
   LOG(INFO) << " [Info] CSC store double valid data num: " << idx_num;
 }
 
@@ -950,7 +989,10 @@ void Blob<float>::ToProtoPrun(BlobProto* proto, bool write_diff, bool prun, int 
 	  if (tmp_idx != valid_num)
 	    LOG(FATAL) << " [Error] Index exceed boundary.( " << tmp_idx << " vs " << valid_num << " )";
 	  
-	  weight_quan(proto, valid_data, valid_num);
+	  if (FLAGS_quan_retrain)
+	    quan_retrain(proto, valid_data, valid_num);
+	  else
+	    weight_quan(proto, valid_data, valid_num);
 	  free(valid_data);
 	}
     }
@@ -988,6 +1030,34 @@ void Blob<double>::ToProtoPrun(BlobProto* proto, bool write_diff, bool prun, int
        (FLAGS_sparse_csc && !FLAGS_prun_fc && !FLAGS_prun_conv)) && (sparse_diff_num != 0))
     {
       encode_weight(proto, data_vec, sparse_diff_num);
+      
+      // quantization
+      if (FLAGS_quan_enable)
+	{
+	  int valid_num = proto->csc_ptr(proto->csc_ptr_size() - 1);
+	  int tmp_idx = 0;
+	  double* valid_data;
+	  valid_data = (double *)malloc(sizeof(double) * valid_num);
+	  assert(valid_data != NULL);
+	  
+	  for (int idx = 0; idx < proto->double_csc_data_size(); ++idx)
+	    {
+	      if (proto->double_csc_data(idx) != 0)
+		{
+		  valid_data[tmp_idx] = proto->double_csc_data(idx);
+		  tmp_idx++;
+		}
+	    }
+	  
+	  if (tmp_idx != valid_num)
+	    LOG(FATAL) << " [Error] Index exceed boundary.( " << tmp_idx << " vs " << valid_num << " )";
+	  
+	  if (FLAGS_quan_retrain)
+	    quan_retrain(proto, valid_data, valid_num);
+	  else
+	    weight_quan(proto, valid_data, valid_num);
+	  free(valid_data);
+	}
     }
   else
     {
@@ -1020,7 +1090,7 @@ void Blob<float>::decode_weight(const BlobProto* proto, float** weight) const {
   float* tmp_data = *weight;
   int base_idx = 0;
   int reality_idx = 0;
-
+  
   CHECK_EQ(FLAGS_sparse_col, (row_num - 1)) << " mismatch data size, need: " <<
     FLAGS_sparse_col << ", reality: " << (row_num - 1);
 
@@ -1034,7 +1104,7 @@ void Blob<float>::decode_weight(const BlobProto* proto, float** weight) const {
       for (int j = start; j < end; j++)
 	{
 	  // decode CSC + quantization
-	  if (FLAGS_quan_enable)
+	  if (FLAGS_quan_enable && (proto->csc_quan_data_size() != 0))
 	    {
 	      if (proto->csc_quan_data(reality_idx) == 0)
 		{
@@ -1103,7 +1173,7 @@ void Blob<double>::decode_weight(const BlobProto* proto, double** weight) const 
       for (int j = start; j < end; j++)
 	{
 	  // decode CSC + quantization
-	  if (FLAGS_quan_enable)
+	  if (FLAGS_quan_enable && (proto->csc_quan_data_size() != 0))
 	    {
 	      if (proto->csc_quan_data(reality_idx) == 0)
 		{
@@ -1150,6 +1220,61 @@ void Blob<double>::decode_weight(const BlobProto* proto, double** weight) const 
 	    }
 	}
     }
+}
+
+template <typename Dtype>
+void Blob<Dtype>::quan_retrain(BlobProto* proto, Dtype* weight, int num) {
+  bool flag = true;
+  int cen_num = 1 << FLAGS_quan_k_max;
+  int cen_fill_num = 0;
+  Dtype centroid[cen_num];
+  for (int idx = 0; idx < cen_num; ++idx)
+    centroid[idx] = 0;
+	      
+  for (int i = 0; i < num; ++i)
+    {
+      flag = true;
+      for (int j = 0; j < cen_num; ++j)
+	{
+	  if (centroid[j] == weight[i])
+	    {
+	      flag = false;
+	      proto->add_csc_quan_data(j+1);
+	      continue;
+	    }
+	}
+      if (flag)
+	{
+	  centroid[cen_fill_num] = weight[i];
+	  proto->add_csc_quan_data(cen_fill_num+1);
+	  cen_fill_num++;
+	}
+    }
+  cen_fill_num--;
+  if (cen_fill_num > cen_num)
+    LOG(FATAL) << " [Error] Index exceed bonudary( " << cen_fill_num << " vs " << cen_num << " ).";
+  if (proto->csc_quan_data_size() != num)
+    LOG(FATAL) << " [Error] Size not equal( " << proto->csc_quan_data_size() << " vs " << num << " ).";
+		  
+  LOG(INFO) << " ^_^ here" << " szie: " << proto->csc_quan_data_size();
+  
+  quan_set_data(proto, centroid, cen_fill_num);
+  //for (int i = 0; i < cen_fill_num-1; ++i)
+  //  proto->set_quan_data(proto->csc_quan_data(i)-1, valid_data[i]);
+  proto->clear_csc_data();
+  proto->clear_quan_label();
+}
+
+template <>
+void Blob<float>::quan_set_data(BlobProto* proto, float* data, int num) {
+  for (int i = 0; i < num; ++i)
+    proto->add_quan_data(data[i]);
+}
+
+template <>
+void Blob<double>::quan_set_data(BlobProto* proto, double* data, int num) {
+  for (int i = 0; i < num; ++i)
+    proto->add_double_quan_data(data[i]);
 }
 
 template <typename Dtype>
@@ -1319,13 +1444,26 @@ void Blob<unsigned int>::quan_to_blob(BlobProto* proto, unsigned int* quan_data,
 
 template <>
 void Blob<float>::quan_to_blob(BlobProto* proto, float* quan_data, int* label, int best_k, int num){
+  int label_index = 0;
   int csc_data_idx = 0;
   int max_data_idx = proto->csc_data_size();
   int cluster_num = (1 << best_k);
 
   for (int cluster_idx = 0; cluster_idx < cluster_num; ++cluster_idx)
     proto->add_quan_data(quan_data[cluster_idx]);
-
+  
+  // for quantization retrain
+  for (int idx = 0; idx < num; ++idx)
+    {
+      while (proto->quan_label(label_index) == 0)
+	label_index++;
+      
+      proto->set_quan_label(label_index, label[idx]+1);
+      label_index++;
+    }
+  if (label_index > count_)
+    LOG(FATAL) << " [Error] Index exceed boundary( " << label_index << " vs " << count_ <<" ).";
+  
   // TODO: rewrite csc_data
   proto->clear_csc_data();
   for (int idx = 0; idx < num; ++idx)
@@ -1341,18 +1479,31 @@ void Blob<float>::quan_to_blob(BlobProto* proto, float* quan_data, int* label, i
     }
 
   if (csc_data_idx != max_data_idx)
-    LOG(FATAL) << " [Error] Index exceed boundary.";
+    LOG(FATAL) << " [Error] Index exceed boundary( " << csc_data_idx << " vs " << max_data_idx << " ).";
 }
 
 template <>
 void Blob<double>::quan_to_blob(BlobProto* proto, double* quan_data, int* label, int best_k, int num){
+  int label_index = 0;
   int csc_data_idx = 0;
   int max_data_idx = proto->double_csc_data_size();
   int cluster_num = (1 << best_k);
 
   for (int cluster_idx = 0; cluster_idx < cluster_num; ++cluster_idx)
     proto->add_double_quan_data(quan_data[cluster_idx]);
-
+  
+  // for quantization retrain
+  for (int idx = 0; idx < num; ++idx)
+    {
+      while (proto->quan_label(label_index) == 0)
+	label_index++;
+      
+      proto->set_quan_label(label_index, label[idx]+1);
+      label_index++;
+    }
+  if (label_index > count_)
+    LOG(FATAL) << " [Error] Index exceed boundary( " << label_index << " vs " << count_ <<" ).";
+  
   // TODO: rewrite csc_data
   proto->clear_double_csc_data();
   for (int idx = 0; idx < num; ++idx)
@@ -1368,7 +1519,7 @@ void Blob<double>::quan_to_blob(BlobProto* proto, double* quan_data, int* label,
     }
 
   if (csc_data_idx != max_data_idx)
-    LOG(FATAL) << " [Error] Index exceed boundary.";
+    LOG(FATAL) << " [Error] Index exceed boundary( " << csc_data_idx << " vs " << max_data_idx << " ).";
 }
 
 INSTANTIATE_CLASS(Blob);
