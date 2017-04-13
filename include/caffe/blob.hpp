@@ -230,23 +230,24 @@ class Blob {
   void Update();
   
   // for pruning by zhluo
+  void quan_retrain(BlobProto* proto);
+  void weight_quan(BlobProto* proto, Dtype* weight, int num);
+  Dtype kmeans(Dtype* weight, int weight_num, Dtype** data, int** data_num, int** label, int centroid_num = 0);
+  
   void encode_weight(BlobProto* proto, Dtype* weight, int diff_num = 0);
   void decode_weight(const BlobProto* proto, Dtype** weight) const;
   
-  void FromProto(const BlobProto& proto, bool reshape = true);
-  void ToProto(BlobProto* proto, bool write_diff = false) const;
   // for pruning by zhluo
   Dtype* cpu_data_prun() const;
   void quan_to_blob(BlobProto* proto, Dtype* quan_data, int* label, int best_k, int num);
-  void quan_set_data(BlobProto* proto, Dtype* data, int num);
-  void quan_retrain(BlobProto* proto, Dtype* weight, int num);
-  void weight_quan(BlobProto* proto, Dtype* weight, int num);
-  Dtype kmeans(Dtype* weight, int weight_num, Dtype** data, int** data_num, int** label, int centroid_num = 0);
   void Update_Prun();
   void Update_Quan(int* quan_data);
   int CalWeightPrun(Dtype** weight, int count, bool prun = false, int num = 0) const;
   void ToProtoPrun(BlobProto* proto, bool write_diff = false, bool prun = false,
 		   int num = 0, int sparse_diff_num = 0);
+
+  void FromProto(const BlobProto& proto, bool reshape = true);
+  void ToProto(BlobProto* proto, bool write_diff = false) const;
 
   /// @brief Compute the sum of absolute values (L1 norm) of the data.
   Dtype asum_data() const;

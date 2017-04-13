@@ -767,11 +767,11 @@ void Net<Dtype>::CopyTrainedLayersFrom(const NetParameter& param) {
       const bool kReshape = false;
       target_blobs[j]->FromProto(source_layer.blobs(j), kReshape);
 
-      // modify for quantization
-      if (source_layer.blobs(j).quan_label_size() != 0)
+      if (source_layer.blobs(j).csc_quan_data_size() != 0)
 	{
-	  for (int idx = 0; idx < source_layer.blobs(j).quan_label_size(); ++idx)
-	    quan_index_[quan_idx].push_back(source_layer.blobs(j).quan_label(idx));
+	  for (int i = 0; i < source_layer.blobs(j).csc_quan_data_size(); ++i)
+	    if (source_layer.blobs(j).csc_quan_data(i) != 0)
+	      quan_index_[quan_idx].push_back(source_layer.blobs(j).csc_quan_data(i));
 	  LOG(INFO) << " >::< quan index: " << quan_idx << " quan num: " << quan_index_[quan_idx].size();
 	  quan_idx++;
 	}

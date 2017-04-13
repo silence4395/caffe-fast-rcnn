@@ -30,9 +30,6 @@ message BlobProto {
   // weight quantization, by zhluo
   repeated float quan_data = 15 [packed = true];
   repeated double double_quan_data = 16 [packed = true];
-  
-  // flush memory space when quantization retrain
-  repeated int32 quan_label = 17 [packed = true];
 }
 
 // The BlobProtoVector is simply a way to pass multiple blobproto instances

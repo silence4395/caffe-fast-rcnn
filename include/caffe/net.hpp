@@ -336,12 +336,11 @@ class Net {
   vector<Callback*> before_backward_;
   vector<Callback*> after_backward_;
 
-public:
   // modify for quantization, by zhluo 4/11/2017
-  //vector<vector<int> > quan_index_[500];
-  //int quan_count_;
+public:
   vector<int> quan_index_[200];
   int quan_idx;
+  
 DISABLE_COPY_AND_ASSIGN(Net);
 };
 
