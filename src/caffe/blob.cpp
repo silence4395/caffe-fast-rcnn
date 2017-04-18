@@ -1051,7 +1051,7 @@ void Blob<float>::ToProtoPrun(BlobProto* proto, bool write_diff, bool prun, int 
   valid_num = CalWeightPrun(&data_vec, count_, prun, num);
   valid_num = valid_num * 2 + FLAGS_sparse_col + 1;
 
-  if (((FLAGS_sparse_csc && prun && (valid_num < count_)) ||
+  if (((FLAGS_sparse_csc && prun /*&& (valid_num < count_)*/) ||
        (FLAGS_sparse_csc && !FLAGS_prun_fc && !FLAGS_prun_conv)) && (sparse_diff_num != 0))
     {
       encode_weight(proto, data_vec, sparse_diff_num);
@@ -1113,7 +1113,7 @@ void Blob<double>::ToProtoPrun(BlobProto* proto, bool write_diff, bool prun, int
   valid_num = CalWeightPrun(&data_vec, count_, prun, num);
   valid_num = valid_num * 2 + FLAGS_sparse_col + 1;
 
-  if (((FLAGS_sparse_csc && prun && (valid_num < count_)) ||
+  if (((FLAGS_sparse_csc && prun/* && (valid_num < count_)*/) ||
        (FLAGS_sparse_csc && !FLAGS_prun_fc && !FLAGS_prun_conv)) && (sparse_diff_num != 0))
     {
       encode_weight(proto, data_vec, sparse_diff_num);
