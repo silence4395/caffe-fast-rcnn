@@ -10,7 +10,7 @@
 #include "caffe/layer_factory.hpp"
 #include "caffe/proto/caffe.pb.h"
 #include "caffe/util/math_functions.hpp"
-
+#include "caffe/prun_cfg.hpp"
 /**
  Forward declare boost::thread instead of including boost/thread.hpp
  to avoid a boost/NVCC issues (#1009, #1010) on OSX.
@@ -38,7 +38,7 @@ class Layer {
    * layer.
    */
   explicit Layer(const LayerParameter& param)
-    : layer_param_(param), is_shared_(false) {
+    : layer_param_(param) {
       // Set phase and copy blobs (if there are any).
       phase_ = param.phase();
       if (layer_param_.blobs_size() > 0) {
@@ -66,7 +66,6 @@ class Layer {
    */
   void SetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-    InitMutex();
     CheckBlobCounts(bottom, top);
     LayerSetUp(bottom, top);
     Reshape(bottom, top);
@@ -91,30 +90,6 @@ class Layer {
    */
   virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {}
-
-  /**
-   * @brief Whether a layer should be shared by multiple nets during data
-   *        parallelism. By default, all layers except for data layers should
-   *        not be shared. data layers should be shared to ensure each worker
-   *        solver access data sequentially during data parallelism.
-   */
-  virtual inline bool ShareInParallel() const { return false; }
-
-  /** @brief Return whether this layer is actually shared by other nets.
-   *         If ShareInParallel() is true and using more than one GPU and the
-   *         net has TRAIN phase, then this function is expected return true.
-   */
-  inline bool IsShared() const { return is_shared_; }
-
-  /** @brief Set whether this layer is actually shared by other nets
-   *         If ShareInParallel() is true and using more than one GPU and the
-   *         net has TRAIN phase, then is_shared should be set true.
-   */
-  inline void SetShared(bool is_shared) {
-    CHECK(ShareInParallel() || !is_shared)
-        << type() << "Layer does not support sharing.";
-    is_shared_ = is_shared;
-  }
 
   /**
    * @brief Adjust the shapes of top blobs and internal buffers to accommodate
@@ -192,7 +167,8 @@ class Layer {
    * @brief Writes the layer parameter to a protocol buffer
    */
   virtual void ToProto(LayerParameter* param, bool write_diff = false);
-
+  // for pruning by zhluo
+  virtual void ToProtoPrun(LayerParameter* param, bool write_diff = false, int num = 0);
   /**
    * @brief Returns the scalar loss associated with a top blob at a given index.
    */
@@ -429,19 +405,6 @@ class Layer {
   }
 
  private:
-  /** Whether this layer is actually shared by other nets*/
-  bool is_shared_;
-
-  /** The mutex for sequential forward if this layer is shared */
-  shared_ptr<boost::mutex> forward_mutex_;
-
-  /** Initialize forward_mutex_ */
-  void InitMutex();
-  /** Lock forward_mutex_ if this layer is shared */
-  void Lock();
-  /** Unlock forward_mutex_ if this layer is shared */
-  void Unlock();
-
   DISABLE_COPY_AND_ASSIGN(Layer);
 };  // class Layer
 
@@ -451,8 +414,6 @@ class Layer {
 template <typename Dtype>
 inline Dtype Layer<Dtype>::Forward(const vector<Blob<Dtype>*>& bottom,
     const vector<Blob<Dtype>*>& top) {
-  // Lock during forward to ensure sequential forward
-  Lock();
   Dtype loss = 0;
   Reshape(bottom, top);
   switch (Caffe::mode()) {
@@ -483,7 +444,6 @@ inline Dtype Layer<Dtype>::Forward(const vector<Blob<Dtype>*>& bottom,
   default:
     LOG(FATAL) << "Unknown caffe mode.";
   }
-  Unlock();
   return loss;
 }
 
@@ -509,9 +469,56 @@ void Layer<Dtype>::ToProto(LayerParameter* param, bool write_diff) {
   param->Clear();
   param->CopyFrom(layer_param_);
   param->clear_blobs();
+  
   for (int i = 0; i < blobs_.size(); ++i) {
     blobs_[i]->ToProto(param->add_blobs(), write_diff);
   }
+}
+
+  // for pruning by zhluo
+template <typename Dtype>
+void Layer<Dtype>::ToProtoPrun(LayerParameter* param, bool write_diff, int num) {
+  param->Clear();
+  param->CopyFrom(layer_param_);
+  param->clear_blobs();
+  
+  if (FLAGS_prun_fc)
+    {
+      for (int i = 0; i < blobs_.size(); ++i)
+	{
+	  if ((i == 0) && !strcmp(param->type().c_str(), "InnerProduct")) // i = 0: weight; i = 1:bias
+	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, true, num, FLAGS_idx_diff_fc);
+	  else
+	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, false, 0, 0);
+	}
+    }
+  else if (FLAGS_prun_conv)
+    {
+      for (int i = 0; i < blobs_.size(); ++i)
+	{
+	  if ((i == 0) && !strcmp(param->type().c_str(), "Convolution"))
+	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, true, num, FLAGS_idx_diff_conv);
+	  else
+	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, false, 0, 0);
+	}
+    }
+  else if (FLAGS_sparse_csc)
+    {
+      for (int i = 0; i < blobs_.size(); ++i)
+	{
+	  if ((i == 0) && !strcmp(param->type().c_str(), "Convolution"))
+	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, false, 0, FLAGS_idx_diff_conv);
+	  else if ((i == 0) && !strcmp(param->type().c_str(), "InnerProduct"))
+	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, false, 0, FLAGS_idx_diff_fc);
+	  else // bias
+	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, false, 0, 0);
+	}
+    }
+  else
+    {
+      LOG(FATAL) << " [Error] if you use prun, please first set FLAGS_prun_fc" <<
+	" or FLAGS_prun_conv or FLAGS_prun_csc.";
+    }
 }
 
 }  // namespace caffe

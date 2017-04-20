@@ -8,6 +8,9 @@
 #include <string>
 
 #include "caffe/caffe.hpp"
+
+#include "caffe/prun_cfg.hpp"
+
 #include "caffe/util/io.hpp"
 #include "caffe/util/upgrade_proto.hpp"
 
@@ -15,7 +18,30 @@ using std::ofstream;
 
 using namespace caffe;  // NOLINT(build/namespaces)
 
+// for pruning by zhluo
+DEFINE_bool(prun_conv, false, "Optional; pruning CONV layers");
+DEFINE_bool(prun_fc, false, "Optional; pruning FC layers");
+DEFINE_bool(prun_retrain, false, "Optional; retrain net after pruning");
+DEFINE_bool(sparse_csc, false, "Optional; blob use CSC sparse storage");
+DEFINE_int32(sparse_col, 1, "Optional; sparse column num");
+DEFINE_int32(prun_fc_num, 0, "Optional; the number of FC layers");
+DEFINE_int32(idx_diff_conv, 0, "Optional; conv weight diff between valid weight");
+DEFINE_int32(idx_diff_fc  , 0, "Optional; fc weight diff between valid weight");
+DEFINE_double(conv_ratio_0, 0, "Optional; conv layer prun ratio");
+DEFINE_double(conv_ratio_1, 0, "Optional; conv layer prun ratio");
+DEFINE_double(conv_ratio_2, 0, "Optional; conv layer prun ratio");
+DEFINE_double(fc_ratio_0, 0, "Optional; fc layer prun ratio");
+DEFINE_double(fc_ratio_1, 0, "Optional; fc layer prun ratio");
+DEFINE_double(fc_ratio_2, 0, "Optional; fc layer prun ratio");
+DEFINE_int32(quan_enable, 0, "Optional; enable quantization");
+DEFINE_double(quan_lr, 0, "Optional; get SolverParameter learn rate");
+DEFINE_int32(quan_k_min, 1, "Optional; min 2^k clusters");
+DEFINE_int32(quan_k_max, 8, "Optional; max 2^k clusters");
+DEFINE_int32(quan_max_iter, 256, "Optional; k-mean max iteration num");
+DEFINE_bool(quan_retrain, false, "Optional; fine-tune quantization data");
+
 int main(int argc, char** argv) {
+  FLAGS_alsologtostderr = 1;  // Print output to stderr (while still logging)
   ::google::InitGoogleLogging(argv[0]);
   if (argc != 3) {
     LOG(ERROR) << "Usage: "
@@ -31,7 +57,6 @@ int main(int argc, char** argv) {
     return 2;
   }
   bool need_upgrade = NetNeedsUpgrade(net_param);
-  bool need_data_upgrade = NetNeedsDataUpgrade(net_param);
   bool success = true;
   if (need_upgrade) {
     success = UpgradeNetAsNeeded(input_filename, &net_param);
@@ -43,13 +68,9 @@ int main(int argc, char** argv) {
     LOG(ERROR) << "File already in latest proto format: " << input_filename;
   }
 
-  if (need_data_upgrade) {
-    UpgradeNetDataTransformation(&net_param);
-  }
-
   // Save new format prototxt.
   WriteProtoToTextFile(net_param, argv[2]);
 
-  LOG(ERROR) << "Wrote upgraded NetParameter text proto to " << argv[2];
+  LOG(INFO) << "Wrote upgraded NetParameter text proto to " << argv[2];
   return !success;
 }

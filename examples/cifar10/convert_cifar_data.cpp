@@ -23,6 +23,28 @@ using boost::scoped_ptr;
 using std::string;
 namespace db = caffe::db;
 
+// for pruning by zhluo
+DEFINE_bool(prun_conv, false, "Optional; pruning CONV layers");
+DEFINE_bool(prun_fc, false, "Optional; pruning FC layers");
+DEFINE_bool(prun_retrain, false, "Optional; retrain net after pruning");
+DEFINE_bool(sparse_csc, false, "Optional; blob use CSC sparse storage");
+DEFINE_int32(sparse_col, 1, "Optional; sparse column num");
+DEFINE_int32(prun_fc_num, 0, "Optional; the number of FC layers");
+DEFINE_int32(idx_diff_conv, 0, "Optional; conv weight diff between valid weight");
+DEFINE_int32(idx_diff_fc  , 0, "Optional; fc weight diff between valid weight");
+DEFINE_double(conv_ratio_0, 0, "Optional; conv layer prun ratio");
+DEFINE_double(conv_ratio_1, 0, "Optional; conv layer prun ratio");
+DEFINE_double(conv_ratio_2, 0, "Optional; conv layer prun ratio");
+DEFINE_double(fc_ratio_0, 0, "Optional; fc layer prun ratio");
+DEFINE_double(fc_ratio_1, 0, "Optional; fc layer prun ratio");
+DEFINE_double(fc_ratio_2, 0, "Optional; fc layer prun ratio");
+DEFINE_int32(quan_enable, 0, "Optional; enable quantization");
+DEFINE_double(quan_lr, 0, "Optional; get SolverParameter learn rate");
+DEFINE_int32(quan_k_min, 1, "Optional; min 2^k clusters");
+DEFINE_int32(quan_k_max, 8, "Optional; max 2^k clusters");
+DEFINE_int32(quan_max_iter, 256, "Optional; k-mean max iteration num");
+DEFINE_bool(quan_retrain, false, "Optional; fine-tune quantization data");
+
 const int kCIFARSize = 32;
 const int kCIFARImageNBytes = 3072;
 const int kCIFARBatchSize = 10000;
@@ -91,6 +113,8 @@ void convert_dataset(const string& input_folder, const string& output_folder,
 }
 
 int main(int argc, char** argv) {
+  FLAGS_alsologtostderr = 1;
+
   if (argc != 4) {
     printf("This script converts the CIFAR dataset to the leveldb format used\n"
            "by caffe to perform classification.\n"

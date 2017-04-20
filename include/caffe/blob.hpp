@@ -117,11 +117,11 @@ class Blob {
    */
   inline int CanonicalAxisIndex(int axis_index) const {
     CHECK_GE(axis_index, -num_axes())
-        << "axis " << axis_index << " out of range for " << num_axes()
-        << "-D Blob with shape " << shape_string();
+	<< "axis " << axis_index << " out of range for " << num_axes()
+	<< "-D Blob with shape " << shape_string();
     CHECK_LT(axis_index, num_axes())
-        << "axis " << axis_index << " out of range for " << num_axes()
-        << "-D Blob with shape " << shape_string();
+	<< "axis " << axis_index << " out of range for " << num_axes()
+	<< "-D Blob with shape " << shape_string();
     if (axis_index < 0) {
       return axis_index + num_axes();
     }
@@ -138,7 +138,7 @@ class Blob {
   inline int width() const { return LegacyShape(3); }
   inline int LegacyShape(int index) const {
     CHECK_LE(num_axes(), 4)
-        << "Cannot use legacy accessors on Blobs with > 4 axes.";
+	<< "Cannot use legacy accessors on Blobs with > 4 axes.";
     CHECK_LT(index, 4);
     CHECK_GE(index, -4);
     if (index >= num_axes() || index < -num_axes()) {
@@ -169,9 +169,9 @@ class Blob {
     for (int i = 0; i < num_axes(); ++i) {
       offset *= shape(i);
       if (indices.size() > i) {
-        CHECK_GE(indices[i], 0);
-        CHECK_LT(indices[i], shape(i));
-        offset += indices[i];
+	CHECK_GE(indices[i], 0);
+	CHECK_LT(indices[i], shape(i));
+	offset += indices[i];
       }
     }
     return offset;
@@ -220,6 +220,7 @@ class Blob {
   void set_cpu_data(Dtype* data);
   const int* gpu_shape() const;
   const Dtype* gpu_data() const;
+  void set_gpu_data(Dtype* data);
   const Dtype* cpu_diff() const;
   const Dtype* gpu_diff() const;
   Dtype* mutable_cpu_data();
@@ -227,6 +228,24 @@ class Blob {
   Dtype* mutable_cpu_diff();
   Dtype* mutable_gpu_diff();
   void Update();
+  
+  // for pruning by zhluo
+  void quan_retrain(BlobProto* proto);
+  void weight_quan(BlobProto* proto, Dtype* weight, int num);
+  Dtype kmeans(Dtype* weight, int weight_num, Dtype** data, int** data_num, int** label, int centroid_num = 0);
+  
+  void encode_weight(BlobProto* proto, Dtype* weight, int diff_num = 0);
+  void decode_weight(const BlobProto* proto, Dtype** weight) const;
+  
+  // for pruning by zhluo
+  Dtype* cpu_data_prun() const;
+  void quan_to_blob(BlobProto* proto, Dtype* quan_data, int* label, int best_k, int num);
+  void Update_Prun();
+  void Update_Quan(int* quan_data);
+  int CalWeightPrun(Dtype** weight, int count, bool prun = false, int num = 0) const;
+  void ToProtoPrun(BlobProto* proto, bool write_diff = false, bool prun = false,
+		   int num = 0, int sparse_diff_num = 0);
+
   void FromProto(const BlobProto& proto, bool reshape = true);
   void ToProto(BlobProto* proto, bool write_diff = false) const;
 
@@ -264,7 +283,7 @@ class Blob {
   void ShareDiff(const Blob& other);
 
   bool ShapeEquals(const BlobProto& other);
-
+  
  protected:
   shared_ptr<SyncedMemory> data_;
   shared_ptr<SyncedMemory> diff_;

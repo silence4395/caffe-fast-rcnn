@@ -1,0 +1,1 @@
+./examples/mnist/run.sh  examples/mnist/lenet_solver.prototxt 1 examples/mnist/lenet_iter_1000.caffemodel src/caffe/prun_cfg.cfg 0.003
