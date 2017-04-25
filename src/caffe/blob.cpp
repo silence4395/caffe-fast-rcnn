@@ -717,17 +717,13 @@ int Blob<Dtype>::CalWeightPrun(Dtype** weight, int count, bool prun, int num) co
 	  sort(sort_weight.begin(), sort_weight.end());
 
 	  if (num == 0)
-	    {
-	      thr_weight = sort_weight[count * FLAGS_fc_ratio_0];
-	    }
+	    thr_weight = sort_weight[count * FLAGS_fc_ratio_0];
 	  else if (num == 1)
-	    {
-	      thr_weight = sort_weight[count * FLAGS_fc_ratio_1];
-	    }
+	    thr_weight = sort_weight[count * FLAGS_fc_ratio_1];
 	  else if (num == 2)
-	    {
-	      thr_weight = sort_weight[count * FLAGS_fc_ratio_2];
-	    }
+	    thr_weight = sort_weight[count * FLAGS_fc_ratio_2];
+	  else if (num == 3)
+	    thr_weight = sort_weight[count * FLAGS_fc_ratio_3];
 	  else
 	    {
 	      LOG(FATAL) << " Error: Illegal FC ratio ";
@@ -796,17 +792,21 @@ int Blob<Dtype>::CalWeightPrun(Dtype** weight, int count, bool prun, int num) co
 	  sort(sort_weight.begin(), sort_weight.end());
 
 	  if (num == 0)
-	    {
-	      thr_weight = sort_weight[count * FLAGS_conv_ratio_0];
-	    }
+	    thr_weight = sort_weight[count * FLAGS_conv_ratio_0];
 	  else if (num == 1)
-	    {
-	      thr_weight = sort_weight[count * FLAGS_conv_ratio_1];
-	    }
+	    thr_weight = sort_weight[count * FLAGS_conv_ratio_1];
 	  else if (num == 2)
-	    {
-	      thr_weight = sort_weight[count * FLAGS_conv_ratio_2];
-	    }
+	    thr_weight = sort_weight[count * FLAGS_conv_ratio_2];
+	  else if (num == 3)
+	    thr_weight = sort_weight[count * FLAGS_conv_ratio_3];
+	  else if (num == 4)
+	    thr_weight = sort_weight[count * FLAGS_conv_ratio_4];
+	  else if (num == 5)
+	    thr_weight = sort_weight[count * FLAGS_conv_ratio_5];
+	  else if (num == 6)
+	    thr_weight = sort_weight[count * FLAGS_conv_ratio_6];
+	  else if (num == 7)
+	    thr_weight = sort_weight[count * FLAGS_conv_ratio_7];
 	  else
 	    {
 	      //LOG(FATAL) << " Error: Illegal CONV ratio ";

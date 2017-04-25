@@ -252,6 +252,37 @@ message SolverParameter {
 
   // Overlap compute and communication for data parallel training
   optional bool layer_wise_reduce = 41 [default = true];
+  
+  // modify for faster-rcnn pruning, by zhuo 4/24/2017
+  optional bool prun_conv = 42 [default = false];
+  optional float conv_ratio_0 = 43 [default = 0.5];
+  optional float conv_ratio_1 = 44 [default = 0.5];
+  optional float conv_ratio_2 = 45 [default = 0.5];
+  optional float conv_ratio_3 = 46 [default = 0.5];
+  optional float conv_ratio_4 = 47 [default = 0.5];
+  optional float conv_ratio_5 = 48 [default = 0.5];
+  optional float conv_ratio_6 = 49 [default = 0.5];
+  optional float conv_ratio_7 = 50 [default = 0.5];
+  
+  optional bool prun_fc = 51 [default = false];
+  optional float fc_ratio_0 = 52 [default = 0.8];
+  optional float fc_ratio_1 = 53 [default = 0.8];
+  optional float fc_ratio_2 = 54 [default = 0.8];
+  optional float fc_ratio_3 = 55 [default = 0.8];
+
+  optional int32 prun_fc_num = 56 [default = 3];
+  optional bool prun_retrain = 57 [default = false];
+  
+  optional bool sparse_csc = 58 [default = false];
+  optional int32 sparse_col = 59 [default = 1];
+  optional int32 idx_diff_conv = 60 [default = 8];
+  optional int32 idx_diff_fc = 61 [default = 5];
+  
+  optional bool quan_enable = 62 [default = false];
+  optional int32 quan_k_min = 63 [default = 4];
+  optional int32 quan_k_max = 64 [default = 8];
+  optional int32 quan_max_iter = 65 [default = 10000];
+  optional bool quan_retrain = 66 [default = false];
 }
 
 // A message that stores the solver snapshots
