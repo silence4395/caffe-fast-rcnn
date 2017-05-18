@@ -191,6 +191,28 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
       }
     }
   }
+  
+  // print every layer weight and bias update information
+  for (int layer_id = 0; layer_id < param.layer_size(); ++layer_id)
+    {
+      for (int param_id = 0; param_id < layers_[layer_id]->blobs().size(); ++param_id)
+	{ 
+	  if (layers_[layer_id]->param_propagate_down(param_id))
+	    {
+	      if (param_id == 0)
+		LOG(INFO) << " [ UPDATE INFO ]" << layer_names_[layer_id] << " needs update itself weights.";
+	      else if (param_id == 1)
+		LOG(INFO) << " [ UPDATE INFO ]" << layer_names_[layer_id] << " needs update itself bias."; 
+	    }
+	  else
+	    {
+	      if (param_id == 0)
+		LOG(INFO) << " [ UPDATE INFO ]" << layer_names_[layer_id] << " not need update itself weights.";
+	      else if (param_id == 1)
+		LOG(INFO) << " [ UPDATE INFO ]" << layer_names_[layer_id] << " not need update itself bias."; 
+	    }
+	}
+    }
   // Go through the net backwards to determine which blobs contribute to the
   // loss.  We can skip backward computation for blobs that don't contribute
   // to the loss.
@@ -226,9 +248,9 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
     if (!layer_contributes_loss) { layer_need_backward_[layer_id] = false; }
     if (Caffe::root_solver()) {
       if (layer_need_backward_[layer_id]) {
-	LOG(INFO) << layer_names_[layer_id] << " needs backward computation.";
+	LOG(INFO) << " [ DIFF BP INFO] " << layer_names_[layer_id] << " needs backward computation.";
       } else {
-	LOG(INFO) << layer_names_[layer_id]
+	LOG(INFO) << " [ DIFF BP INFO] " << layer_names_[layer_id]
 	    << " does not need backward computation.";
       }
     }

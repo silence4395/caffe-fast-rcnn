@@ -85,32 +85,31 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   FLAGS_quan_max_iter =	param_.quan_max_iter();
   FLAGS_quan_retrain  = param_.quan_retrain() ;
   
-  LOG(INFO) << " ====== Pruning config parameters ======";
-  LOG(INFO) << " ^-^ prun_conv: "     << FLAGS_prun_conv    ;
-  LOG(INFO) << " ^-^ conv_ratio_0: "  << FLAGS_conv_ratio_0 ;
-  LOG(INFO) << " ^-^ conv_ratio_1: "  << FLAGS_conv_ratio_1 ;
-  LOG(INFO) << " ^-^ conv_ratio_2: "  << FLAGS_conv_ratio_2 ;
-  LOG(INFO) << " ^-^ conv_ratio_3: "  << FLAGS_conv_ratio_3 ;
-  LOG(INFO) << " ^-^ conv_ratio_4: "  << FLAGS_conv_ratio_4 ;
-  LOG(INFO) << " ^-^ conv_ratio_5: "  << FLAGS_conv_ratio_5 ;
-  LOG(INFO) << " ^-^ conv_ratio_6: "  << FLAGS_conv_ratio_6 ;
-  LOG(INFO) << " ^-^ conv_ratio_7: "  << FLAGS_conv_ratio_7 ;
-  LOG(INFO) << " ^-^ prun_fc: "       << FLAGS_prun_fc      ;
-  LOG(INFO) << " ^-^ fc_ratio_0: "    << FLAGS_fc_ratio_0   ;
-  LOG(INFO) << " ^-^ fc_ratio_1: "    << FLAGS_fc_ratio_1   ;
-  LOG(INFO) << " ^-^ fc_ratio_2: "    << FLAGS_fc_ratio_2   ;
-  LOG(INFO) << " ^-^ fc_ratio_3: "    << FLAGS_fc_ratio_3   ;
-  LOG(INFO) << " ^-^ prun_fc_num: "   << FLAGS_prun_fc_num  ;
-  LOG(INFO) << " ^-^ prun_retrain:"   << FLAGS_prun_retrain ;
-  LOG(INFO) << " ^-^ sparse_csc: "    << FLAGS_sparse_csc   ;
-  LOG(INFO) << " ^-^ sparse_col: "    << FLAGS_sparse_col   ;
-  LOG(INFO) << " ^-^ idx_diff_conv: " << FLAGS_idx_diff_conv;
-  LOG(INFO) << " ^-^ idx_diff_fc: "   << FLAGS_idx_diff_fc  ;
-  LOG(INFO) << " ^-^ quan_enable: "   << FLAGS_quan_enable  ;
-  LOG(INFO) << " ^-^ quan_k_min: "    << FLAGS_quan_k_min   ;
-  LOG(INFO) << " ^-^ quan_k_max: "    << FLAGS_quan_k_max   ;
-  LOG(INFO) << " ^-^ quan_max_iter: " << FLAGS_quan_max_iter;
-  LOG(INFO) << " ^-^ quan_retrain: "  << FLAGS_quan_retrain ;
+  LOG(INFO) << "  [ PRUN INFO ]  prun_conv    : "  << FLAGS_prun_conv    ;
+  LOG(INFO) << "  [ PRUN INFO ]  conv_ratio_0 : "  << FLAGS_conv_ratio_0 ;
+  LOG(INFO) << "  [ PRUN INFO ]  conv_ratio_1 : "  << FLAGS_conv_ratio_1 ;
+  LOG(INFO) << "  [ PRUN INFO ]  conv_ratio_2 : "  << FLAGS_conv_ratio_2 ;
+  LOG(INFO) << "  [ PRUN INFO ]  conv_ratio_3 : "  << FLAGS_conv_ratio_3 ;
+  LOG(INFO) << "  [ PRUN INFO ]  conv_ratio_4 : "  << FLAGS_conv_ratio_4 ;
+  LOG(INFO) << "  [ PRUN INFO ]  conv_ratio_5 : "  << FLAGS_conv_ratio_5 ;
+  LOG(INFO) << "  [ PRUN INFO ]  conv_ratio_6 : "  << FLAGS_conv_ratio_6 ;
+  LOG(INFO) << "  [ PRUN INFO ]  conv_ratio_7 : "  << FLAGS_conv_ratio_7 ;
+  LOG(INFO) << "  [ PRUN INFO ]  prun_fc      : "  << FLAGS_prun_fc      ;
+  LOG(INFO) << "  [ PRUN INFO ]  fc_ratio_0   : "  << FLAGS_fc_ratio_0   ;
+  LOG(INFO) << "  [ PRUN INFO ]  fc_ratio_1   : "  << FLAGS_fc_ratio_1   ;
+  LOG(INFO) << " [ PRUN INFO ]  fc_ratio_2   : "  << FLAGS_fc_ratio_2   ;
+  LOG(INFO) << " [ PRUN INFO ]  fc_ratio_3   : "  << FLAGS_fc_ratio_3   ;
+  LOG(INFO) << " [ PRUN INFO ]  prun_fc_num  : "  << FLAGS_prun_fc_num  ;
+  LOG(INFO) << " [ PRUN INFO ]  prun_retrain : "   << FLAGS_prun_retrain ;
+  LOG(INFO) << " [ PRUN INFO ]  sparse_csc   : "  << FLAGS_sparse_csc   ;
+  LOG(INFO) << " [ PRUN INFO ]  sparse_col   : "  << FLAGS_sparse_col   ;
+  LOG(INFO) << " [ PRUN INFO ]  idx_diff_conv: "  << FLAGS_idx_diff_conv;
+  LOG(INFO) << " [ PRUN INFO ]  idx_diff_fc  : "  << FLAGS_idx_diff_fc  ;
+  LOG(INFO) << " [ PRUN INFO ]  quan_enable  : "  << FLAGS_quan_enable  ;
+  LOG(INFO) << " [ PRUN INFO ]  quan_k_min   : "  << FLAGS_quan_k_min   ;
+  LOG(INFO) << " [ PRUN INFO ]  quan_k_max   : "  << FLAGS_quan_k_max   ;
+  LOG(INFO) << " [ PRUN INFO ]  quan_max_iter: "  << FLAGS_quan_max_iter;
+  LOG(INFO) << " [ PRUN INFO ]  quan_retrain : "  << FLAGS_quan_retrain ;
 }
 
 template <typename Dtype>
