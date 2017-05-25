@@ -1,0 +1,1 @@
+./build/tools/quantization quantize --model=examples/mnist/lenet_train_test.prototxt --weights=examples/mnist/lenet_final.caffemodel --model_quantized=examples/mnist/lenet_quantized.prototxt --iterations=100 --gpu=1 --trimming_mode=dynamic_fixed_point --error_margin=1

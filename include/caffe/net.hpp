@@ -252,6 +252,25 @@ class Net {
     after_backward_.push_back(value);
   }
 
+  /**
+   * @brief Look at the layer activations and parameters to find the maximum
+   * absolute values. The following layers are considered: Convolution,
+   * InnerProduct.
+   *
+   * @param layer_name The layers that should be quantized to fixed point.
+   * @param max_in The highest layer input.
+   * @param max_out The highest layer output.
+   * @param max_param The highest layer parameter.
+   *
+   * For layer parameters, the biases are ignored.
+   */
+  void RangeInLayers(vector<string>* layer_name, vector<Dtype>* max_in,
+      vector<Dtype>* max_out, vector<Dtype>* max_param);
+  /**
+   * @brief Find the maximum value in a blob.
+   */
+  Dtype findMax(Blob<Dtype>* blob);
+
  protected:
   // Helpers for Init.
   /// @brief Append a new top blob to the net.
