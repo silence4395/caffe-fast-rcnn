@@ -264,8 +264,29 @@ class Net {
    *
    * For layer parameters, the biases are ignored.
    */
+  vector<Dtype> layer_max_in_;
+  vector<Dtype> layer_max_out_;
+  vector<Dtype> layer_max_param_;
+  vector<Dtype> layer_max_name_;
+  
+  inline const vector<Dtype>& layer_max_in() const {
+    return layer_max_in_;
+  }
+  
+  inline const vector<Dtype>& layer_max_out() const {
+    return layer_max_out_;
+  }
+  
+  inline const vector<Dtype>& layer_max_param() const {
+    return layer_max_param_;
+  }
+  
+  inline const vector<Dtype>& layer_max_name() const {
+    return layer_max_name_;
+  }
   void RangeInLayers(vector<string>* layer_name, vector<Dtype>* max_in,
       vector<Dtype>* max_out, vector<Dtype>* max_param);
+  void DisplayMaxValue();
   /**
    * @brief Find the maximum value in a blob.
    */

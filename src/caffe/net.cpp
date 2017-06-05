@@ -20,32 +20,32 @@
 #include "caffe/prun_cfg.hpp"
 
 // for pruning by zhluo
-//DEFINE_bool(prun_conv, false, "Optional; pruning CONV layers");
-//DEFINE_bool(prun_fc, false, "Optional; pruning FC layers");
-//DEFINE_bool(prun_retrain, false, "Optional; retrain net after pruning");
-//DEFINE_bool(sparse_csc, false, "Optional; blob use CSC sparse storage");
-//DEFINE_int32(sparse_col, 1, "Optional; sparse column num");
-//DEFINE_int32(prun_fc_num, 0, "Optional; the number of FC layers");
-//DEFINE_int32(idx_diff_conv, 0, "Optional; conv weight diff between valid weight");
-//DEFINE_int32(idx_diff_fc  , 0, "Optional; fc weight diff between valid weight");
-//DEFINE_double(conv_ratio_0, 0, "Optional; conv layer_0 prun ratio");
-//DEFINE_double(conv_ratio_1, 0, "Optional; conv layer_1 prun ratio");
-//DEFINE_double(conv_ratio_2, 0, "Optional; conv layer_2 prun ratio");
-//DEFINE_double(conv_ratio_3, 0, "Optional; conv layer_3 prun ratio");
-//DEFINE_double(conv_ratio_4, 0, "Optional; conv layer_4 prun ratio");
-//DEFINE_double(conv_ratio_5, 0, "Optional; conv layer_5 prun ratio");
-//DEFINE_double(conv_ratio_6, 0, "Optional; conv layer_6 prun ratio");
-//DEFINE_double(conv_ratio_7, 0, "Optional; conv layer_7 prun ratio");
-//DEFINE_double(fc_ratio_0, 0, "Optional; fc layer_0 prun ratio");
-//DEFINE_double(fc_ratio_1, 0, "Optional; fc layer_1 prun ratio");
-//DEFINE_double(fc_ratio_2, 0, "Optional; fc layer_2 prun ratio");
-//DEFINE_double(fc_ratio_3, 0, "Optional; fc layer_3 prun ratio");
-//DEFINE_int32(quan_enable, 0, "Optional; enable quantization");
-//DEFINE_double(quan_lr, 0, "Optional; get SolverParameter learn rate");
-//DEFINE_int32(quan_k_min, 1, "Optional; min 2^k clusters");
-//DEFINE_int32(quan_k_max, 8, "Optional; max 2^k clusters");
-//DEFINE_int32(quan_max_iter, 256, "Optional; k-mean max iteration num");
-//DEFINE_bool(quan_retrain, false, "Optional; fine-tune quantization data");
+DEFINE_bool(prun_conv, false, "Optional; pruning CONV layers");
+DEFINE_bool(prun_fc, false, "Optional; pruning FC layers");
+DEFINE_bool(prun_retrain, false, "Optional; retrain net after pruning");
+DEFINE_bool(sparse_csc, false, "Optional; blob use CSC sparse storage");
+DEFINE_int32(sparse_col, 1, "Optional; sparse column num");
+DEFINE_int32(prun_fc_num, 0, "Optional; the number of FC layers");
+DEFINE_int32(idx_diff_conv, 0, "Optional; conv weight diff between valid weight");
+DEFINE_int32(idx_diff_fc  , 0, "Optional; fc weight diff between valid weight");
+DEFINE_double(conv_ratio_0, 0, "Optional; conv layer_0 prun ratio");
+DEFINE_double(conv_ratio_1, 0, "Optional; conv layer_1 prun ratio");
+DEFINE_double(conv_ratio_2, 0, "Optional; conv layer_2 prun ratio");
+DEFINE_double(conv_ratio_3, 0, "Optional; conv layer_3 prun ratio");
+DEFINE_double(conv_ratio_4, 0, "Optional; conv layer_4 prun ratio");
+DEFINE_double(conv_ratio_5, 0, "Optional; conv layer_5 prun ratio");
+DEFINE_double(conv_ratio_6, 0, "Optional; conv layer_6 prun ratio");
+DEFINE_double(conv_ratio_7, 0, "Optional; conv layer_7 prun ratio");
+DEFINE_double(fc_ratio_0, 0, "Optional; fc layer_0 prun ratio");
+DEFINE_double(fc_ratio_1, 0, "Optional; fc layer_1 prun ratio");
+DEFINE_double(fc_ratio_2, 0, "Optional; fc layer_2 prun ratio");
+DEFINE_double(fc_ratio_3, 0, "Optional; fc layer_3 prun ratio");
+DEFINE_int32(quan_enable, 0, "Optional; enable quantization");
+DEFINE_double(quan_lr, 0, "Optional; get SolverParameter learn rate");
+DEFINE_int32(quan_k_min, 1, "Optional; min 2^k clusters");
+DEFINE_int32(quan_k_max, 8, "Optional; max 2^k clusters");
+DEFINE_int32(quan_max_iter, 256, "Optional; k-mean max iteration num");
+DEFINE_bool(quan_retrain, false, "Optional; fine-tune quantization data");
 
 namespace caffe {
 
@@ -443,6 +443,41 @@ void Net<Dtype>::RangeInLayers(vector<string>* layer_name,
       // Consider the weights only, ignore the bias
       max_val = findMax(&(*layers_[layer_id]->blobs()[0]));
       max_param->at(index) = std::max(max_param->at(index), max_val);
+      LOG(INFO) << " [ " << index << "INFO ] name: " << layer_names_[layer_id] << ", max in: " << max_in->at(index) << ", max out: " << max_out->at(index) << ", max param: " << max_param->at(index);
+      index++;
+    }
+  }
+}
+
+template <typename Dtype>
+void Net<Dtype>::DisplayMaxValue() {
+  // find every layer's max value
+  int index = 0;
+  Dtype max_val;
+  
+  // Initial vector elements
+  for (int layer_id = 0; layer_id < layers_.size(); ++layer_id) {
+    if (strcmp(layers_[layer_id]->type(), "Convolution") == 0 ||
+	strcmp(layers_[layer_id]->type(), "InnerProduct") == 0) {
+      layer_max_in_.push_back(0);
+      layer_max_out_.push_back(0);
+      layer_max_param_.push_back(0);
+    }
+  }
+  
+  LOG(INFO) << " [ INFO ] Disaply every layer's max value. Layer num: " << layers_.size();
+  for (int layer_id = 0; layer_id < layers_.size(); ++layer_id) {
+    if (strcmp(layers_[layer_id]->type(), "Convolution") == 0 ||
+	strcmp(layers_[layer_id]->type(), "InnerProduct") == 0) {
+      max_val = findMax(bottom_vecs_[layer_id][0]);
+      layer_max_in_.at(index) = std::max(layer_max_in_.at(index), max_val);
+      max_val = findMax(top_vecs_[layer_id][0]);
+      layer_max_out_.at(index) = std::max(layer_max_out_.at(index), max_val);
+      // Consider the weights only, ignore the bias
+      max_val = findMax(&(*layers_[layer_id]->blobs()[0]));
+      layer_max_param_.at(index) = std::max(layer_max_param_.at(index), max_val);
+      layer_max_name_.push_back(layer_id);
+      LOG(INFO) << " [ " << index << "INFO ] name: " << layer_names_[layer_id] << ", max in: " << layer_max_in_.at(index) << ", max out: " << layer_max_out_.at(index) << ", max param: " << layer_max_param_.at(index);
       index++;
     }
   }
@@ -625,6 +660,7 @@ Dtype Net<Dtype>::ForwardFromTo(int start, int end) {
       after_forward_[c]->run(i);
     }
   }
+  
   return loss;
 }
 

@@ -12,8 +12,40 @@ using caffe::Blob;
 using caffe::LayerParameter;
 using caffe::NetParameter;
 
+namespace caffe {
+Quantization::Quantization(int exp_bit) {
+  this->exp_bits_ = exp_bit;
+}
+
+Quantization::Quantization(vector<float> il_in, vector<float> il_out, vector<float> il_param, int cnt) {
+  for (int i = 0 ; i < cnt; ++i)
+    {
+      this->il_in_.push_back(int(il_in[i]));
+      this->il_out_.push_back(int(il_out[i]));
+      this->il_params_.push_back(int(il_param[i]));
+    }
+}
+
+Quantization::Quantization(vector<double> il_in, vector<double> il_out, vector<double> il_param, int cnt) {
+  for (int i = 0 ; i < cnt; ++i)
+    {
+      this->il_in_.push_back(int(il_in[i]));
+      this->il_out_.push_back(int(il_out[i]));
+      this->il_params_.push_back(int(il_param[i]));
+    }
+}
+
 Quantization::Quantization(string model, string weights, string model_quantized,
       int iterations, string trimming_mode, double error_margin, string gpus) {
+  LOG(INFO) << " [ INFO ] Quantization Init. ";
+  LOG(INFO) << " [ INFO ] Model: " << model;
+  LOG(INFO) << " [ INFO ] Weights: " << weights;
+  LOG(INFO) << " [ INFO ] model quantization: " << model_quantized;
+  LOG(INFO) << " [ INFO ] iterations: " << iterations;
+  LOG(INFO) << " [ INFO ] trimming_mode: " << trimming_mode;
+  LOG(INFO) << " [ INFO ] error margin: " << error_margin;
+  LOG(INFO) << " [ INFO ] gpus: " << gpus;
+
   this->model_ = model;
   this->weights_ = weights;
   this->model_quantized_ = model_quantized;
@@ -29,18 +61,22 @@ Quantization::Quantization(string model, string weights, string model_quantized,
 }
 
 void Quantization::QuantizeNet() {
+  LOG(INFO) << "  ===== Start Quantization ===== ";
   CheckWritePermissions(model_quantized_);
   SetGpu();
   // Run the reference floating point network on validation set to find baseline
   // accuracy.
+  LOG(INFO) << " [ INFO ] Get Baseline loss and accuracy.";
   Net<float>* net_val = new Net<float>(model_, caffe::TEST);
   net_val->CopyTrainedLayersFrom(weights_);
   float accuracy;
   RunForwardBatches(this->iterations_, net_val, &accuracy);
   test_score_baseline_ = accuracy;
+  LOG(INFO) << " [ INFO ] Baseline Score: " << test_score_baseline_;
   delete net_val;
   // Run the reference floating point network on train data set to find maximum
   // values. Do statistic for 10 batches.
+  LOG(INFO) << " [ INFO ] Quantization ...";
   Net<float>* net_test = new Net<float>(model_, caffe::TRAIN);
   net_test->CopyTrainedLayersFrom(weights_);
   RunForwardBatches(10, net_test, &accuracy, true);
@@ -103,37 +139,38 @@ void Quantization::SetGpu() {
 void Quantization::RunForwardBatches(const int iterations,
       Net<float>* caffe_net, float* accuracy, const bool do_stats,
       const int score_number) {
-  LOG(INFO) << "Running for " << iterations << " iterations.";
   vector<Blob<float>* > bottom_vec;
   vector<int> test_score_output_id;
   vector<float> test_score;
   float loss = 0;
   for (int i = 0; i < iterations; ++i) {
+    LOG(INFO) << " [ INFO ] Running total " << iterations << " iterations, current iteration num: " << i;
     float iter_loss;
     // Do forward propagation.
     const vector<Blob<float>*>& result =
-        caffe_net->Forward(bottom_vec, &iter_loss);
+	caffe_net->Forward(bottom_vec, &iter_loss);
     // Find maximal values in network.
     if(do_stats) {
       caffe_net->RangeInLayers(&layer_names_, &max_in_, &max_out_,
-          &max_params_);
+	  &max_params_);
     }
     // Keep track of network score over multiple batches.
     loss += iter_loss;
     int idx = 0;
+    LOG(INFO) << " [ INFO ] Forward out result num (bbox + cls): " << result.size();
     for (int j = 0; j < result.size(); ++j) {
       const float* result_vec = result[j]->cpu_data();
       for (int k = 0; k < result[j]->count(); ++k, ++idx) {
-        const float score = result_vec[k];
-        if (i == 0) {
-          test_score.push_back(score);
-          test_score_output_id.push_back(j);
-        } else {
-          test_score[idx] += score;
-        }
-        const std::string& output_name = caffe_net->blob_names()[
-            caffe_net->output_blob_indices()[j]];
-        LOG(INFO) << "Batch " << i << ", " << output_name << " = " << score;
+	const float score = result_vec[k];
+	if (i == 0) {
+	  test_score.push_back(score);
+	  test_score_output_id.push_back(j);
+	} else {
+	  test_score[idx] += score;
+	}
+	const std::string& output_name = caffe_net->blob_names()[
+	    caffe_net->output_blob_indices()[j]];
+	LOG(INFO) << "Batch " << i << ", " << output_name << " = " << score;
       }
     }
   }
@@ -141,14 +178,14 @@ void Quantization::RunForwardBatches(const int iterations,
   LOG(INFO) << "Loss: " << loss;
   for (int i = 0; i < test_score.size(); ++i) {
     const std::string& output_name = caffe_net->blob_names()[
-        caffe_net->output_blob_indices()[test_score_output_id[i]]];
+	caffe_net->output_blob_indices()[test_score_output_id[i]]];
     const float loss_weight = caffe_net->blob_loss_weights()[
-        caffe_net->output_blob_indices()[test_score_output_id[i]]];
+	caffe_net->output_blob_indices()[test_score_output_id[i]]];
     std::ostringstream loss_msg_stream;
     const float mean_score = test_score[i] / iterations;
     if (loss_weight) {
       loss_msg_stream << " (* " << loss_weight
-                      << " = " << loss_weight * mean_score << " loss)";
+		      << " = " << loss_weight * mean_score << " loss)";
     }
     LOG(INFO) << output_name << " = " << mean_score << loss_msg_stream.str();
   }
@@ -168,13 +205,14 @@ void Quantization::Quantize2DynamicFixedPoint() {
   // Debug
   for (int k = 0; k < layer_names_.size(); ++k) {
     LOG(INFO) << "Layer " << layer_names_[k] <<
-        ", integer length input=" << il_in_[k] <<
-        ", integer length output=" << il_out_[k] <<
-        ", integer length parameters=" << il_params_[k];
+	", integer length input=" << il_in_[k] <<
+	", integer length output=" << il_out_[k] <<
+	", integer length parameters=" << il_params_[k];
   }
 
   // Score net with dynamic fixed point convolution parameters.
   // The rest of the net remains in high precision format.
+  LOG(INFO) << " [ INFO ] DynamicFixedPoint: Select Convolution Parameters. ";
   NetParameter param;
   caffe::ReadNetParamsFromTextFileOrDie(model_, &param);
   param.mutable_state()->set_phase(caffe::TEST);
@@ -184,7 +222,7 @@ void Quantization::Quantize2DynamicFixedPoint() {
   Net<float>* net_test;
   for (int bitwidth = 16; bitwidth > 0; bitwidth /= 2) {
     EditNetDescriptionDynamicFixedPoint(&param, "Convolution", "Parameters",
-        bitwidth, -1, -1, -1);
+	bitwidth, -1, -1, -1);
     net_test = new Net<float>(param/*, NULL*/);
     net_test->CopyTrainedLayersFrom(weights_);
     RunForwardBatches(iterations_, net_test, &accuracy);
@@ -196,13 +234,14 @@ void Quantization::Quantize2DynamicFixedPoint() {
 
   // Score net with dynamic fixed point inner product parameters.
   // The rest of the net remains in high precision format.
+  LOG(INFO) << " [ INFO ] DynamicFixedPoint: Select InnerProduct Parameters. ";
   caffe::ReadNetParamsFromTextFileOrDie(model_, &param);
   param.mutable_state()->set_phase(caffe::TEST);
   vector<int> test_bw_fc_params;
   vector<float> test_scores_fc_params;
   for (int bitwidth = 16; bitwidth > 0; bitwidth /= 2) {
     EditNetDescriptionDynamicFixedPoint(&param, "InnerProduct", "Parameters",
-        -1, bitwidth, -1, -1);
+	-1, bitwidth, -1, -1);
     net_test = new Net<float>(param/*, NULL*/);
     net_test->CopyTrainedLayersFrom(weights_);
     RunForwardBatches(iterations_, net_test, &accuracy);
@@ -214,13 +253,14 @@ void Quantization::Quantize2DynamicFixedPoint() {
 
   // Score net with dynamic fixed point layer activations.
   // The rest of the net remains in high precision format.
+  LOG(INFO) << " [ INFO ] DynamicFixedPoint: Select Convolution and InnerProduct Activations. ";
   caffe::ReadNetParamsFromTextFileOrDie(model_, &param);
   param.mutable_state()->set_phase(caffe::TEST);
   vector<int> test_bw_layer_activations;
   vector<float> test_scores_layer_activations;
   for (int bitwidth = 16; bitwidth > 0; bitwidth /= 2) {
     EditNetDescriptionDynamicFixedPoint(&param, "Convolution_and_InnerProduct",
-        "Activations", -1, -1, bitwidth, bitwidth);
+	"Activations", -1, -1, bitwidth, bitwidth);
     net_test = new Net<float>(param/*, NULL*/);
     net_test->CopyTrainedLayersFrom(weights_);
     RunForwardBatches(iterations_, net_test, &accuracy);
@@ -236,21 +276,21 @@ void Quantization::Quantize2DynamicFixedPoint() {
   bw_out_ = 32;
   for (int i = 0; i < test_scores_conv_params.size(); ++i) {
     if (test_scores_conv_params[i] + error_margin_ / 100 >=
-          test_score_baseline_)
+	  test_score_baseline_)
       bw_conv_params_ = test_bw_conv_params[i];
     else
       break;
   }
   for (int i = 0; i < test_scores_fc_params.size(); ++i) {
     if (test_scores_fc_params[i] + error_margin_ / 100 >=
-          test_score_baseline_)
+	  test_score_baseline_)
       bw_fc_params_ = test_bw_fc_params[i];
     else
       break;
   }
   for (int i = 0; i < test_scores_layer_activations.size(); ++i) {
     if (test_scores_layer_activations[i] + error_margin_ / 100 >=
-          test_score_baseline_)
+	  test_score_baseline_)
       bw_out_ = test_bw_layer_activations[i];
     else
       break;
@@ -260,6 +300,7 @@ void Quantization::Quantize2DynamicFixedPoint() {
   // Score dynamic fixed point network.
   // This network combines dynamic fixed point parameters in convolutional and
   // inner product layers, as well as dynamic fixed point activations.
+  LOG(INFO) << " [ INFO ] DynamicFixedPoint: Select Convolution and InnerProduct Parameters and Activations. ";
   caffe::ReadNetParamsFromTextFileOrDie(model_, &param);
   param.mutable_state()->set_phase(caffe::TEST);
   EditNetDescriptionDynamicFixedPoint(&param, "Convolution_and_InnerProduct",
@@ -282,7 +323,7 @@ void Quantization::Quantize2DynamicFixedPoint() {
   LOG(INFO)  << "weights: ";
   for (int j = 0; j < test_scores_conv_params.size(); ++j) {
     LOG(INFO) << test_bw_conv_params[j] << "bit: \t" <<
-        test_scores_conv_params[j];
+	test_scores_conv_params[j];
   }
   LOG(INFO) << "Dynamic fixed point FC";
   LOG(INFO) << "weights: ";
@@ -293,7 +334,7 @@ void Quantization::Quantize2DynamicFixedPoint() {
   LOG(INFO) << "activations:";
   for (int j = 0; j < test_scores_layer_activations.size(); ++j) {
     LOG(INFO) << test_bw_layer_activations[j] << "bit: \t" <<
-        test_scores_layer_activations[j];
+	test_scores_layer_activations[j];
   }
   LOG(INFO) << "Dynamic fixed point net:";
   LOG(INFO) << bw_conv_params_ << "bit CONV weights,";
@@ -409,49 +450,49 @@ void Quantization::EditNetDescriptionDynamicFixedPoint(NetParameter* param,
   for (int i = 0; i < param->layer_size(); ++i) {
     // if this is a convolutional layer which should be quantized ...
     if (layers_2_quantize.find("Convolution") != string::npos &&
-        param->layer(i).type().find("Convolution") != string::npos) {
+	param->layer(i).type().find("Convolution") != string::npos) {
       // quantize parameters
       if (net_part.find("Parameters") != string::npos) {
-        LayerParameter* param_layer = param->mutable_layer(i);
-        param_layer->set_type("ConvolutionRistretto");
-        param_layer->mutable_quantization_param()->set_fl_params(bw_conv -
-            GetIntegerLengthParams(param->layer(i).name()));
-        param_layer->mutable_quantization_param()->set_bw_params(bw_conv);
+	LayerParameter* param_layer = param->mutable_layer(i);
+	param_layer->set_type("ConvolutionRistretto");
+	param_layer->mutable_quantization_param()->set_fl_params(bw_conv -
+	    GetIntegerLengthParams(param->layer(i).name()));
+	param_layer->mutable_quantization_param()->set_bw_params(bw_conv);
       }
       // quantize activations
       if (net_part.find("Activations") != string::npos) {
-        LayerParameter* param_layer = param->mutable_layer(i);
-        param_layer->set_type("ConvolutionRistretto");
-        param_layer->mutable_quantization_param()->set_fl_layer_in(bw_in -
-            GetIntegerLengthIn(param->layer(i).name()));
-        param_layer->mutable_quantization_param()->set_bw_layer_in(bw_in);
-        param_layer->mutable_quantization_param()->set_fl_layer_out(bw_out -
-            GetIntegerLengthOut(param->layer(i).name()));
-        param_layer->mutable_quantization_param()->set_bw_layer_out(bw_out);
+	LayerParameter* param_layer = param->mutable_layer(i);
+	param_layer->set_type("ConvolutionRistretto");
+	param_layer->mutable_quantization_param()->set_fl_layer_in(bw_in -
+	    GetIntegerLengthIn(param->layer(i).name()));
+	param_layer->mutable_quantization_param()->set_bw_layer_in(bw_in);
+	param_layer->mutable_quantization_param()->set_fl_layer_out(bw_out -
+	    GetIntegerLengthOut(param->layer(i).name()));
+	param_layer->mutable_quantization_param()->set_bw_layer_out(bw_out);
       }
     }
     // if this is an inner product layer which should be quantized ...
     if (layers_2_quantize.find("InnerProduct") != string::npos &&
-        (param->layer(i).type().find("InnerProduct") != string::npos ||
-        param->layer(i).type().find("FcRistretto") != string::npos)) {
+	(param->layer(i).type().find("InnerProduct") != string::npos ||
+	param->layer(i).type().find("FcRistretto") != string::npos)) {
       // quantize parameters
       if (net_part.find("Parameters") != string::npos) {
-        LayerParameter* param_layer = param->mutable_layer(i);
-        param_layer->set_type("FcRistretto");
-        param_layer->mutable_quantization_param()->set_fl_params(bw_fc -
-            GetIntegerLengthParams(param->layer(i).name()));
-        param_layer->mutable_quantization_param()->set_bw_params(bw_fc);
+	LayerParameter* param_layer = param->mutable_layer(i);
+	param_layer->set_type("FcRistretto");
+	param_layer->mutable_quantization_param()->set_fl_params(bw_fc -
+	    GetIntegerLengthParams(param->layer(i).name()));
+	param_layer->mutable_quantization_param()->set_bw_params(bw_fc);
       }
       // quantize activations
       if (net_part.find("Activations") != string::npos) {
-        LayerParameter* param_layer = param->mutable_layer(i);
-        param_layer->set_type("FcRistretto");
-        param_layer->mutable_quantization_param()->set_fl_layer_in(bw_in -
-            GetIntegerLengthIn(param->layer(i).name()) );
-        param_layer->mutable_quantization_param()->set_bw_layer_in(bw_in);
-        param_layer->mutable_quantization_param()->set_fl_layer_out(bw_out -
-            GetIntegerLengthOut(param->layer(i).name()) );
-        param_layer->mutable_quantization_param()->set_bw_layer_out(bw_out);
+	LayerParameter* param_layer = param->mutable_layer(i);
+	param_layer->set_type("FcRistretto");
+	param_layer->mutable_quantization_param()->set_fl_layer_in(bw_in -
+	    GetIntegerLengthIn(param->layer(i).name()) );
+	param_layer->mutable_quantization_param()->set_bw_layer_in(bw_in);
+	param_layer->mutable_quantization_param()->set_fl_layer_out(bw_out -
+	    GetIntegerLengthOut(param->layer(i).name()) );
+	param_layer->mutable_quantization_param()->set_bw_layer_out(bw_out);
       }
     }
   }
@@ -460,23 +501,23 @@ void Quantization::EditNetDescriptionDynamicFixedPoint(NetParameter* param,
 void Quantization::EditNetDescriptionMiniFloat(NetParameter* param,
       const int bitwidth) {
   caffe::QuantizationParameter_Precision precision =
-        caffe::QuantizationParameter_Precision_MINIFLOAT;
+	caffe::QuantizationParameter_Precision_MINIFLOAT;
   for (int i = 0; i < param->layer_size(); ++i) {
     if ( param->layer(i).type() == "Convolution" ||
-          param->layer(i).type() == "ConvolutionRistretto") {
+	  param->layer(i).type() == "ConvolutionRistretto") {
       LayerParameter* param_layer = param->mutable_layer(i);
       param_layer->set_type("ConvolutionRistretto");
       param_layer->mutable_quantization_param()->set_precision(precision);
       param_layer->mutable_quantization_param()->set_mant_bits(bitwidth
-          - exp_bits_ - 1);
+	  - exp_bits_ - 1);
       param_layer->mutable_quantization_param()->set_exp_bits(exp_bits_);
     } else if ( param->layer(i).type() == "InnerProduct" ||
-          param->layer(i).type() == "FcRistretto") {
+	  param->layer(i).type() == "FcRistretto") {
       LayerParameter* param_layer = param->mutable_layer(i);
       param_layer->set_type("FcRistretto");
       param_layer->mutable_quantization_param()->set_precision(precision);
       param_layer->mutable_quantization_param()->set_mant_bits(bitwidth
-          - exp_bits_ - 1);
+	  - exp_bits_ - 1);
       param_layer->mutable_quantization_param()->set_exp_bits(exp_bits_);
     }
   }
@@ -488,7 +529,7 @@ void Quantization::EditNetDescriptionIntegerPowerOf2Weights(
       caffe::QuantizationParameter_Precision_INTEGER_POWER_OF_2_WEIGHTS;
   for (int i = 0; i < param->layer_size(); ++i) {
     if ( param->layer(i).type() == "Convolution" ||
-          param->layer(i).type() == "ConvolutionRistretto") {
+	  param->layer(i).type() == "ConvolutionRistretto") {
       LayerParameter* param_layer = param->mutable_layer(i);
       param_layer->set_type("ConvolutionRistretto");
       param_layer->mutable_quantization_param()->set_precision(precision);
@@ -497,7 +538,7 @@ void Quantization::EditNetDescriptionIntegerPowerOf2Weights(
       param_layer->mutable_quantization_param()->set_exp_min(-8);
       param_layer->mutable_quantization_param()->set_exp_max(-1);
     } else if ( param->layer(i).type() == "InnerProduct" ||
-          param->layer(i).type() == "FcRistretto") {
+	  param->layer(i).type() == "FcRistretto") {
       LayerParameter* param_layer = param->mutable_layer(i);
       param_layer->set_type("FcRistretto");
       param_layer->mutable_quantization_param()->set_precision(precision);
@@ -526,3 +567,4 @@ int Quantization::GetIntegerLengthOut(const string layer_name) {
       - layer_names_.begin();
   return il_out_[pos];
 }
+}// namespace caffe

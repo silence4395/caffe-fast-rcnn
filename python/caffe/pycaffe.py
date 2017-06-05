@@ -11,7 +11,7 @@ except:
 import numpy as np
 
 from ._caffe import Net, SGDSolver, NesterovSolver, AdaGradSolver, \
-        RMSPropSolver, AdaDeltaSolver, AdamSolver, NCCL, Timer
+        RMSPropSolver, AdaDeltaSolver, AdamSolver, NCCL, Timer, Quantization
 import caffe.io
 
 import six

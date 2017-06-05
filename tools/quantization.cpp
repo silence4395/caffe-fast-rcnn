@@ -21,6 +21,7 @@ using caffe::shared_ptr;
 using caffe::string;
 using caffe::Timer;
 using caffe::vector;
+using caffe::Quantization;
 using std::ostringstream;
 
 DEFINE_string(model, "",

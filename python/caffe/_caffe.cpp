@@ -19,6 +19,7 @@
 #include "caffe/layers/memory_data_layer.hpp"
 #include "caffe/layers/python_layer.hpp"
 #include "caffe/sgd_solvers.hpp"
+#include "quantization/quantization.hpp"
 
 // Temporary solution for numpy < 1.7 versions: old macro, no promises.
 // You're strongly advised to upgrade to >= 1.7.
@@ -66,6 +67,40 @@ void Log(const string& s) {
 }
 
 void set_random_seed(unsigned int seed) { Caffe::set_random_seed(seed); }
+
+void fixfloat(/*string&*/char* param_file, int bitwidth, int exp_bits, /*string&*/char* new_param_file) {
+  NetParameter param;
+  caffe::ReadNetParamsFromTextFileOrDie(param_file, &param);
+  //param.mutable_state()->set_phase(caffe::TEST);
+  caffe::Quantization quan(exp_bits);
+  quan.EditNetDescriptionMiniFloat(&param, bitwidth);
+  caffe::WriteProtoToTextFile(param, new_param_file);
+}
+
+template<typename Dtype>
+void dynamicfixfloat(/*string&*/char* param_file, int conv_width, int fc_width, int bitwidth,
+		     vector<Dtype> il_in, vector<Dtype> il_out, vector<Dtype> il_param, int cnt,
+		     /*string&*/char* new_param_file, int type){
+  NetParameter param;
+  caffe::ReadNetParamsFromTextFileOrDie(param_file, &param);
+  //param.mutable_state()->set_phase(caffe::TEST);
+  caffe::Quantization quan(il_in, il_out, il_param, cnt);
+  if (type == 0)
+    quan.EditNetDescriptionDynamicFixedPoint(&param, "Convolution",
+  					     "Parameters", bitwidth, -1, -1, -1);
+  else if (type == 1)
+    quan.EditNetDescriptionDynamicFixedPoint(&param, "InnerProduct",
+  					     "Parameters", -1, bitwidth, -1, -1);
+  else if (type == 2)
+    quan.EditNetDescriptionDynamicFixedPoint(&param, "Convolution_and_InnerProduct",
+  					     "Activations", -1, -1, bitwidth, bitwidth);
+  else if (type == 3)
+    quan.EditNetDescriptionDynamicFixedPoint(&param, "Convolution_and_InnerProduct",
+      "Parameters_and_Activations", conv_width, fc_width, bitwidth, bitwidth);
+  else
+    printf(" [ ERROR ] Please set type between zero and two.");
+  caffe::WriteProtoToTextFile(param, new_param_file);
+}
 
 // For convenience, check that input files can be opened, and raise an
 // exception that boost will send to Python if not (caffe could still crash
@@ -130,6 +165,19 @@ shared_ptr<Net<Dtype> > Net_Init(string network_file, int phase,
   return net;
 }
 
+// Quantization constructor
+shared_ptr<Quantization> Quan_Init(string model, string weights, string model_quantized,
+				   int iterations, string trimming_mode, double error_margin, string gpus) {
+  CheckFile(model);
+  //Initialize net
+  shared_ptr<Quantization> quantization(new Quantization(model, weights, model_quantized, iterations,
+							 trimming_mode, error_margin, gpus));
+  return quantization;
+}
+
+void quantization_net(Quantization quan) {
+  quan.QuantizeNet();
+}
 // Legacy Net construct-and-load convenience constructor
 shared_ptr<Net<Dtype> > Net_Init_Load(
     string param_file, string pretrained_param_file, int phase) {
@@ -323,6 +371,10 @@ void Net_after_backward(Net<Dtype>* net, bp::object run) {
   net->add_after_backward(new NetCallback<Dtype>(run));
 }
 
+void max_value(Net<Dtype>* net) {
+  net->DisplayMaxValue();
+}
+
 void Net_add_nccl(Net<Dtype>* net
 #ifdef USE_NCCL
   , NCCL<Dtype>* nccl
@@ -364,6 +416,9 @@ BOOST_PYTHON_MODULE(_caffe) {
   bp::def("set_random_seed", &Caffe::set_random_seed);
 
   bp::def("layer_type_list", &LayerRegistry<Dtype>::LayerTypeList);
+  
+  bp::def("fixfloat", &fixfloat/*, bp::arg("model", "bit_width")*/);
+  bp::def("dynamicfixfloat", &dynamicfixfloat<Dtype>);
 
   bp::enum_<Phase>("Phase")
     .value("TRAIN", caffe::TRAIN)
@@ -401,11 +456,20 @@ BOOST_PYTHON_MODULE(_caffe) {
         bp::return_value_policy<bp::copy_const_reference>()))
     .add_property("_layer_names", bp::make_function(&Net<Dtype>::layer_names,
         bp::return_value_policy<bp::copy_const_reference>()))
+    .add_property("_layer_max_in", bp::make_function(&Net<Dtype>::layer_max_in,
+        bp::return_value_policy<bp::copy_const_reference>()))
+    .add_property("_layer_max_out", bp::make_function(&Net<Dtype>::layer_max_out,
+        bp::return_value_policy<bp::copy_const_reference>()))
+    .add_property("_layer_max_param", bp::make_function(&Net<Dtype>::layer_max_param,
+        bp::return_value_policy<bp::copy_const_reference>()))
+    .add_property("_layer_max_name", bp::make_function(&Net<Dtype>::layer_max_name,
+        bp::return_value_policy<bp::copy_const_reference>()))
     .add_property("_inputs", bp::make_function(&Net<Dtype>::input_blob_indices,
         bp::return_value_policy<bp::copy_const_reference>()))
     .add_property("_outputs",
         bp::make_function(&Net<Dtype>::output_blob_indices,
         bp::return_value_policy<bp::copy_const_reference>()))
+    .add_property("_display_max_value", &max_value)
     .def("_set_input_arrays", &Net_SetInputArrays,
         bp::with_custodian_and_ward<1, 2, bp::with_custodian_and_ward<1, 3> >())
     .def("save", &Net_Save)
@@ -489,6 +553,14 @@ BOOST_PYTHON_MODULE(_caffe) {
   bp::class_<AdamSolver<Dtype>, bp::bases<Solver<Dtype> >,
     shared_ptr<AdamSolver<Dtype> >, boost::noncopyable>(
         "AdamSolver", bp::init<string>());
+
+  bp::class_<Quantization, shared_ptr<Quantization>, boost::noncopyable>(
+    "Quantization", bp::init<std::string, std::string, std::string, int, std::string, double, std::string>())
+    .def(bp::init<std::string, std::string, std::string, int, std::string, double, std::string>())
+    //.def("init", bp::make_constructor(&Quan_Init, bp::default_call_policies(), (bp::arg("model"), bp::arg("weights"), bp::arg("model_quantized"), bp::arg("iterations"), bp::arg("trimming_mode"), bp::arg("error_margin"), bp::arg("gpus"))))
+    //.add_property("_quan_net", &Quantization::QuantizeNet);
+    .add_property("_quan_net", &quantization_net);
+  BP_REGISTER_SHARED_PTR_TO_PYTHON(Quantization);
 
   bp::def("get_solver", &GetSolverFromFile,
       bp::return_value_policy<bp::manage_new_object>());

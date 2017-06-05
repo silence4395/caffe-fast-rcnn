@@ -7,6 +7,7 @@ using caffe::string;
 using caffe::vector;
 using caffe::Net;
 
+namespace caffe {
 /**
  * @brief Approximate 32-bit floating point networks.
  *
@@ -15,6 +16,9 @@ using caffe::Net;
  */
 class Quantization {
 public:
+  explicit Quantization(int exp_bit);
+  explicit Quantization(vector<float> il_in, vector<float> il_out, vector<float> il_param, int cnt);
+  explicit Quantization(vector<double> il_in, vector<double> il_out, vector<double> il_param, int cnt);
   explicit Quantization(string model, string weights, string model_quantized,
       int iterations, string trimming_mode, double error_margin, string gpus);
   void QuantizeNet();
@@ -65,6 +69,7 @@ private:
   /**
    * @brief Change network to dynamic fixed point.
    */
+public:
   void EditNetDescriptionDynamicFixedPoint(caffe::NetParameter* param,
       const string layers_2_quantize, const string network_part,
       const int bw_conv, const int bw_fc, const int bw_in, const int bw_out);
@@ -81,6 +86,7 @@ private:
    * @brief Find the integer length for dynamic fixed point parameters of a
    * certain layer.
    */
+private:
   int GetIntegerLengthParams(const string layer_name);
   /**
    * @brief Find the integer length for dynamic fixed point inputs of a certain
@@ -118,4 +124,5 @@ private:
   int exp_bits_;
 };
 
+} // namesapce caffe
 #endif // QUANTIZATION_HPP_
