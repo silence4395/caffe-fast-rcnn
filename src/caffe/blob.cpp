@@ -1191,7 +1191,7 @@ void Blob<float>::decode_weight(const BlobProto* proto, float** weight) const {
       for (int j = start; j < end; j++)
 	{
 	  // decode CSC + quantization
-	  if (FLAGS_quan_enable && (proto->csc_quan_data_size() != 0))
+	  if (/*FLAGS_quan_enable &&*/ (proto->csc_quan_data_size() != 0))
 	    {
 	      if (proto->csc_quan_data(reality_idx) == 0)
 		{
@@ -1260,7 +1260,7 @@ void Blob<double>::decode_weight(const BlobProto* proto, double** weight) const 
       for (int j = start; j < end; j++)
 	{
 	  // decode CSC + quantization
-	  if (FLAGS_quan_enable && (proto->csc_quan_data_size() != 0))
+	  if (/*FLAGS_quan_enable &&*/ (proto->csc_quan_data_size() != 0))
 	    {
 	      if (proto->csc_quan_data(reality_idx) == 0)
 		{
