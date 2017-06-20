@@ -16,9 +16,10 @@ namespace caffe {
  */
 class Quantization {
 public:
+  explicit Quantization();
+  explicit Quantization(vector<string> quan_layer_names_, vector<float> quan_max_in_,
+			vector<float> quan_max_out_, vector<float> quan_max_params_);
   explicit Quantization(int exp_bit);
-  explicit Quantization(vector<float> il_in, vector<float> il_out, vector<float> il_param, int cnt);
-  explicit Quantization(vector<double> il_in, vector<double> il_out, vector<double> il_param, int cnt);
   explicit Quantization(string model, string weights, string model_quantized,
       int iterations, string trimming_mode, double error_margin, string gpus);
   void QuantizeNet();
@@ -109,15 +110,19 @@ private:
   float test_score_baseline_;
   // The maximal absolute values of layer inputs, parameters and
   // layer outputs.
+public:
   vector<float> max_in_, max_params_, max_out_;
 
+private:
   // The integer bits for dynamic fixed point layer inputs, parameters and
   // layer outputs.
   vector<int> il_in_, il_params_, il_out_;
   // The name of the layers that need to be quantized to dynamic fixed point.
+public:
   vector<string> layer_names_;
   // The number of bits used for dynamic fixed point layer inputs, parameters
   // and layer outputs.
+private:
   int bw_in_, bw_conv_params_, bw_fc_params_, bw_out_;
 
   // The number of bits used for minifloat exponent.

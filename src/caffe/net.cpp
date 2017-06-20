@@ -449,40 +449,6 @@ void Net<Dtype>::RangeInLayers(vector<string>* layer_name,
   }
 }
 
-template <typename Dtype>
-void Net<Dtype>::DisplayMaxValue() {
-  // find every layer's max value
-  int index = 0;
-  Dtype max_val;
-  
-  // Initial vector elements
-  for (int layer_id = 0; layer_id < layers_.size(); ++layer_id) {
-    if (strcmp(layers_[layer_id]->type(), "Convolution") == 0 ||
-	strcmp(layers_[layer_id]->type(), "InnerProduct") == 0) {
-      layer_max_in_.push_back(0);
-      layer_max_out_.push_back(0);
-      layer_max_param_.push_back(0);
-    }
-  }
-  
-  LOG(INFO) << " [ INFO ] Disaply every layer's max value. Layer num: " << layers_.size();
-  for (int layer_id = 0; layer_id < layers_.size(); ++layer_id) {
-    if (strcmp(layers_[layer_id]->type(), "Convolution") == 0 ||
-	strcmp(layers_[layer_id]->type(), "InnerProduct") == 0) {
-      max_val = findMax(bottom_vecs_[layer_id][0]);
-      layer_max_in_.at(index) = std::max(layer_max_in_.at(index), max_val);
-      max_val = findMax(top_vecs_[layer_id][0]);
-      layer_max_out_.at(index) = std::max(layer_max_out_.at(index), max_val);
-      // Consider the weights only, ignore the bias
-      max_val = findMax(&(*layers_[layer_id]->blobs()[0]));
-      layer_max_param_.at(index) = std::max(layer_max_param_.at(index), max_val);
-      layer_max_name_.push_back(layer_id);
-      LOG(INFO) << " [ " << index << "INFO ] name: " << layer_names_[layer_id] << ", max in: " << layer_max_in_.at(index) << ", max out: " << layer_max_out_.at(index) << ", max param: " << layer_max_param_.at(index);
-      index++;
-    }
-  }
-}
-
 // Helper for Net::Init: add a new top blob to the net.
 template <typename Dtype>
 void Net<Dtype>::AppendTop(const NetParameter& param, const int layer_id,

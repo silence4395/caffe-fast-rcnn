@@ -49,6 +49,9 @@ namespace caffe {
 typedef float Dtype;
 const int NPY_DTYPE = NPY_FLOAT32;
 
+vector<float> quan_max_in_, quan_max_params_, quan_max_out_;
+vector<string> quan_layer_names_;
+
 // Selecting mode.
 void set_mode_cpu() { Caffe::set_mode(Caffe::CPU); }
 void set_mode_gpu() { Caffe::set_mode(Caffe::GPU); }
@@ -78,13 +81,11 @@ void fixfloat(/*string&*/char* param_file, int bitwidth, int exp_bits, /*string&
 }
 
 template<typename Dtype>
-void dynamicfixfloat(/*string&*/char* param_file, int conv_width, int fc_width, int bitwidth,
-		     vector<Dtype> il_in, vector<Dtype> il_out, vector<Dtype> il_param, int cnt,
-		     /*string&*/char* new_param_file, int type){
+void dynamicfixfloat(char* param_file, int conv_width, int fc_width, int bitwidth,
+		     char* new_param_file, int type){
   NetParameter param;
   caffe::ReadNetParamsFromTextFileOrDie(param_file, &param);
-  //param.mutable_state()->set_phase(caffe::TEST);
-  caffe::Quantization quan(il_in, il_out, il_param, cnt);
+  caffe::Quantization quan(quan_layer_names_, quan_max_in_, quan_max_out_, quan_max_params_);
   if (type == 0)
     quan.EditNetDescriptionDynamicFixedPoint(&param, "Convolution",
   					     "Parameters", bitwidth, -1, -1, -1);
@@ -372,7 +373,7 @@ void Net_after_backward(Net<Dtype>* net, bp::object run) {
 }
 
 void max_value(Net<Dtype>* net) {
-  net->DisplayMaxValue();
+  net->RangeInLayers(&quan_layer_names_, &quan_max_in_, &quan_max_out_, &quan_max_params_);
 }
 
 void Net_add_nccl(Net<Dtype>* net

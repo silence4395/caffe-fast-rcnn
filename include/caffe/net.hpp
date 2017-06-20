@@ -286,7 +286,6 @@ class Net {
   }
   void RangeInLayers(vector<string>* layer_name, vector<Dtype>* max_in,
       vector<Dtype>* max_out, vector<Dtype>* max_param);
-  void DisplayMaxValue();
   /**
    * @brief Find the maximum value in a blob.
    */

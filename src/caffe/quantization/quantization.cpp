@@ -1,3 +1,4 @@
+#include "assert.h"
 #include "boost/algorithm/string.hpp"
 
 #include "caffe/caffe.hpp"
@@ -13,26 +14,34 @@ using caffe::LayerParameter;
 using caffe::NetParameter;
 
 namespace caffe {
+Quantization::Quantization() {
+  // empty constructor
+}
+
+Quantization::Quantization(vector<string> quan_layer_names_, vector<float> quan_max_in_,
+			   vector<float> quan_max_out_, vector<float> quan_max_params_) {
+  
+  assert((quan_layer_names_.size() != quan_max_in_.size()) &&
+	 (quan_max_in_.size() != quan_max_out_.size()) &&
+	 (quan_max_out_.size() != quan_max_params_.size()));
+  // Find the integer length for dynamic fixed point numbers.
+  // The integer length is chosen such that no saturation occurs.
+  // This approximation assumes an infinitely long factional part.
+  // For layer activations, we reduce the integer length by one bit.
+  for (int i = 0 ; i < quan_layer_names_.size(); ++i)
+    {
+      this->il_in_.push_back((int)ceil(log2(quan_max_in_[i])));
+      this->il_out_.push_back((int)ceil(log2(quan_max_out_[i])));
+      this->il_params_.push_back((int)ceil(log2(quan_max_params_[i])+1));
+      this->layer_names_.push_back(quan_layer_names_[i]);
+    }
+  // debug info
+  for (int i = 0 ; i < quan_layer_names_.size(); ++i)
+    LOG(INFO) << " [ info ] LAYER NAME: " << this->layer_names_[i] << ", input integrate num: " << this->il_in_[i] << ", ouput integrate num: " << this->il_out_[i] << ", layer weight num: " << this->il_params_[i];
+}
+
 Quantization::Quantization(int exp_bit) {
   this->exp_bits_ = exp_bit;
-}
-
-Quantization::Quantization(vector<float> il_in, vector<float> il_out, vector<float> il_param, int cnt) {
-  for (int i = 0 ; i < cnt; ++i)
-    {
-      this->il_in_.push_back(int(il_in[i]));
-      this->il_out_.push_back(int(il_out[i]));
-      this->il_params_.push_back(int(il_param[i]));
-    }
-}
-
-Quantization::Quantization(vector<double> il_in, vector<double> il_out, vector<double> il_param, int cnt) {
-  for (int i = 0 ; i < cnt; ++i)
-    {
-      this->il_in_.push_back(int(il_in[i]));
-      this->il_out_.push_back(int(il_out[i]));
-      this->il_params_.push_back(int(il_param[i]));
-    }
 }
 
 Quantization::Quantization(string model, string weights, string model_quantized,
@@ -455,7 +464,7 @@ void Quantization::EditNetDescriptionDynamicFixedPoint(NetParameter* param,
       if (net_part.find("Parameters") != string::npos) {
 	LayerParameter* param_layer = param->mutable_layer(i);
 	param_layer->set_type("ConvolutionRistretto");
-	param_layer->mutable_quantization_param()->set_fl_params(bw_conv -
+	param_layer->mutable_quantization_param()->set_fl_params(bw_conv - 1 -
 	    GetIntegerLengthParams(param->layer(i).name()));
 	param_layer->mutable_quantization_param()->set_bw_params(bw_conv);
       }
@@ -463,10 +472,10 @@ void Quantization::EditNetDescriptionDynamicFixedPoint(NetParameter* param,
       if (net_part.find("Activations") != string::npos) {
 	LayerParameter* param_layer = param->mutable_layer(i);
 	param_layer->set_type("ConvolutionRistretto");
-	param_layer->mutable_quantization_param()->set_fl_layer_in(bw_in -
+	param_layer->mutable_quantization_param()->set_fl_layer_in(bw_in - 1 -
 	    GetIntegerLengthIn(param->layer(i).name()));
 	param_layer->mutable_quantization_param()->set_bw_layer_in(bw_in);
-	param_layer->mutable_quantization_param()->set_fl_layer_out(bw_out -
+	param_layer->mutable_quantization_param()->set_fl_layer_out(bw_out - 1 -
 	    GetIntegerLengthOut(param->layer(i).name()));
 	param_layer->mutable_quantization_param()->set_bw_layer_out(bw_out);
       }
@@ -479,7 +488,7 @@ void Quantization::EditNetDescriptionDynamicFixedPoint(NetParameter* param,
       if (net_part.find("Parameters") != string::npos) {
 	LayerParameter* param_layer = param->mutable_layer(i);
 	param_layer->set_type("FcRistretto");
-	param_layer->mutable_quantization_param()->set_fl_params(bw_fc -
+	param_layer->mutable_quantization_param()->set_fl_params(bw_fc - 1 -
 	    GetIntegerLengthParams(param->layer(i).name()));
 	param_layer->mutable_quantization_param()->set_bw_params(bw_fc);
       }
@@ -487,10 +496,10 @@ void Quantization::EditNetDescriptionDynamicFixedPoint(NetParameter* param,
       if (net_part.find("Activations") != string::npos) {
 	LayerParameter* param_layer = param->mutable_layer(i);
 	param_layer->set_type("FcRistretto");
-	param_layer->mutable_quantization_param()->set_fl_layer_in(bw_in -
+	param_layer->mutable_quantization_param()->set_fl_layer_in(bw_in - 1 -
 	    GetIntegerLengthIn(param->layer(i).name()) );
 	param_layer->mutable_quantization_param()->set_bw_layer_in(bw_in);
-	param_layer->mutable_quantization_param()->set_fl_layer_out(bw_out -
+	param_layer->mutable_quantization_param()->set_fl_layer_out(bw_out - 1 -
 	    GetIntegerLengthOut(param->layer(i).name()) );
 	param_layer->mutable_quantization_param()->set_bw_layer_out(bw_out);
       }
