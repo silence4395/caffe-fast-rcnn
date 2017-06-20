@@ -986,6 +986,7 @@ void Net<Dtype>::ToProto(NetParameter* param, bool write_diff) const {
 
   int fc_num = 0;
   int conv_num = 0;
+  LOG(INFO) << " [ Info ] Net write data to blob.";
   for (int i = 0; i < layers_.size(); ++i) {
     LayerParameter* layer_param = param->add_layer();
     //layers_[i]->ToProto(layer_param, write_diff);

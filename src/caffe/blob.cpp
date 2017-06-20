@@ -1191,7 +1191,7 @@ void Blob<float>::decode_weight(const BlobProto* proto, float** weight) const {
       for (int j = start; j < end; j++)
 	{
 	  // decode CSC + quantization
-	  if (FLAGS_quan_enable && (proto->csc_quan_data_size() != 0))
+	  if (/*FLAGS_quan_enable &&*/ (proto->csc_quan_data_size() != 0))
 	    {
 	      if (proto->csc_quan_data(reality_idx) == 0)
 		{
@@ -1260,7 +1260,7 @@ void Blob<double>::decode_weight(const BlobProto* proto, double** weight) const 
       for (int j = start; j < end; j++)
 	{
 	  // decode CSC + quantization
-	  if (FLAGS_quan_enable && (proto->csc_quan_data_size() != 0))
+	  if (/*FLAGS_quan_enable &&*/ (proto->csc_quan_data_size() != 0))
 	    {
 	      if (proto->csc_quan_data(reality_idx) == 0)
 		{
@@ -1372,7 +1372,7 @@ void Blob<Dtype>::weight_quan(BlobProto* proto, Dtype* weight, int num) {
 	  wcss = kmeans(weight, num, &quan_data, &quan_data_num, &quan_label, centroid_num);
 
 	  if (last_wcss == wcss)
-	   break;
+	    break;
 	  last_wcss = wcss;
 	}
 
@@ -1388,6 +1388,10 @@ void Blob<Dtype>::weight_quan(BlobProto* proto, Dtype* weight, int num) {
 	  memcpy(last_quan_data, quan_data, sizeof(Dtype) * centroid_num);
 	  memcpy(last_quan_label, quan_label, sizeof(int) * num);
 	}
+      
+      // NOTE: 0.1 is temporary threshold, different Net maybe have different threshold
+      if (wcss < 0.1)
+	break;
     }
 
   LOG(INFO) << " [Info] best K: " << best_k;
@@ -1442,13 +1446,13 @@ Dtype Blob<Dtype>::kmeans(Dtype* weight, int weight_num, Dtype** data, int** dat
       centroid_data[idx] = centroid_data[idx]/centroid_data_num[idx];
 
   // calculate WCSS
-  for (int i = 0; i < centroid_num; ++i)
-    for (int j = 0; j <= i/*centroid_num*/; ++j)
-      wcss += fabs(centroid_data[j] - centroid_data[i]) * fabs(centroid_data[j] - centroid_data[i]);
+  //for (int i = 0; i < centroid_num; ++i)
+  //  for (int j = 0; j <= i/*centroid_num*/; ++j)
+  //    wcss += fabs(centroid_data[j] - centroid_data[i]) * fabs(centroid_data[j] - centroid_data[i]);
    
-  //for (int weight_idx = 0; weight_idx < weight_num; ++weight_idx)
-  //  wcss += fabs(weight[weight_idx] - centroid_data[centroid_idx[weight_idx]]) *
-  //    fabs(weight[weight_idx] - centroid_data[centroid_idx[weight_idx]]);
+  for (int weight_idx = 0; weight_idx < weight_num; ++weight_idx)
+    wcss += fabs(weight[weight_idx] - centroid_data[centroid_idx[weight_idx]]) *
+      fabs(weight[weight_idx] - centroid_data[centroid_idx[weight_idx]]);
   
   return wcss;
 }
