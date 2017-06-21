@@ -339,6 +339,7 @@ class Net {
   // modify for quantization, by zhluo 4/11/2017
 public:
   vector<int> quan_index_[200];
+  vector<string> quan_name_;
   int quan_idx;
   
 DISABLE_COPY_AND_ASSIGN(Net);
