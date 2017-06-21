@@ -30,7 +30,7 @@
 
 reset
 set terminal png
-set term pngcairo size 2048,1080
+set term pngcairo size 800,600
 set output "your_chart_name.png"
 set style data lines
 set key right
@@ -45,6 +45,73 @@ set ylabel "Training loss"
 plot "faster_rcnn.log.train" using 1:3 title "bbox_loss", "faster_rcnn.log.train" using 1:4 title "cls_loss", \
      "faster_rcnn.log.train" using 1:5 title "rpn_cls_loss", \
      "faster_rcnn.log.train" using 1:6 title "rpn_loss_bbox"
+
+#############################################################################################
+reset
+set terminal png
+set term pngcairo size 800,600
+set output "bbox_loss.png"
+set style data lines
+set key right
+
+###### Fields in the data file your_log_name.log.train are
+###### Iters Seconds TrainingLoss LearningRate
+
+# Training loss vs. training iterations
+set title "Training loss vs. training iterations"
+set xlabel "Training iterations"
+set ylabel "Training loss"
+plot "faster_rcnn.log.train" using 1:3 title "bbox_loss"
+########################################################################
+reset
+set terminal png
+set term pngcairo size 800,600
+set output "cls_loss.png"
+set style data lines
+set key right
+
+###### Fields in the data file your_log_name.log.train are
+###### Iters Seconds TrainingLoss LearningRate
+
+# Training loss vs. training iterations
+set title "Training loss vs. training iterations"
+set xlabel "Training iterations"
+set ylabel "Training loss"
+plot "faster_rcnn.log.train" using 1:4 title "cls_loss"
+######################################################################
+reset
+set terminal png
+set term pngcairo size 800,600
+set output "rpn_cls_loss.png"
+set style data lines
+set key right
+
+###### Fields in the data file your_log_name.log.train are
+###### Iters Seconds TrainingLoss LearningRate
+
+# Training loss vs. training iterations
+set title "Training loss vs. training iterations"
+set xlabel "Training iterations"
+set ylabel "Training loss"
+plot "faster_rcnn.log.train" using 1:5 title "rpn_cls_loss"
+###################################################################
+reset
+set terminal png
+set term pngcairo size 800,600
+set output "rpn_loss_bbox.png"
+set style data lines
+set key right
+
+###### Fields in the data file your_log_name.log.train are
+###### Iters Seconds TrainingLoss LearningRate
+
+# Training loss vs. training iterations
+set title "Training loss vs. training iterations"
+set xlabel "Training iterations"
+set ylabel "Training loss"
+plot "faster_rcnn.log.train" using 1:6 title "rpn_loss_bbox"
+###################################################################################################
+
 
 # Training loss vs. training time
 # plot "mnist.log.train" using 2:3 title "mnist"
