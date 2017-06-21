@@ -968,9 +968,11 @@ void Net<Dtype>::ToProto(NetParameter* param, bool write_diff) const {
     else
       layers_[i]->ToProto(layer_param, write_diff);
 
-    if (FLAGS_prun_fc && !strcmp(layer_param->type().c_str(), "InnerProduct"))
+    if (FLAGS_prun_fc && (!strcmp(layer_param->type().c_str(), "InnerProduct") ||
+			  !strcmp(layer_param->type().c_str(), "FcRistretto")))
       fc_num++;
-    else if (FLAGS_prun_conv && !strcmp(layer_param->type().c_str(), "Convolution"))
+    else if (FLAGS_prun_conv && (!strcmp(layer_param->type().c_str(), "Convolution") ||
+				 !strcmp(layer_param->type().c_str(), "ConvolutionRistretto")))
       conv_num++;
 
     LOG(INFO) << "> here layer type: " << layer_param->type().c_str();
