@@ -1128,6 +1128,31 @@ void Net<Dtype>::Update() {
 		}
 	    }
 	}
+      else if (FLAGS_sparse_csc)
+	{
+	  int name_idx_ = 0;
+	  int quan_update_idx = 0;
+	  for (int i = 0; i < learnable_params_.size(); ++i)
+	    {
+	      if (i % 2 == 0)
+		{
+		  // Make sure a uniform quan data layer info and update layer info
+		  // lookup need backward layer name
+		  while(layers_[name_idx_]->param_propagate_down(0) == 0)
+		    name_idx_++;
+		  // matching quan data layer name
+		  quan_update_idx = 0;
+		  while(strcmp(quan_name_[quan_update_idx].c_str(), layer_names_[name_idx_].c_str()) != 0)
+		    quan_update_idx++;
+		  name_idx_++;
+		  // quan layer update 
+		  if (quan_index_[quan_update_idx].empty())
+		    LOG(FATAL) << " [Error] vector is empty( index: " << quan_update_idx << " ).";
+		  int *quan_data = &quan_index_[quan_update_idx][0];
+		  learnable_params_[i]->Update_Quan(quan_data);
+		}
+	    }
+	}
       else
 	{
 	  LOG(FATAL) << " Error: please define prun_fc or prun_conv";
