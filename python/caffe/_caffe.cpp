@@ -79,6 +79,17 @@ vector<float> getmaxout() {
   return quan_max_out_;
 }
 
+void power_of_two(char* param_file) {
+  NetParameter param;
+  caffe::ReadNetParamsFromTextFileOrDie(param_file, &param);
+  caffe::Quantization quan(quan_layer_names_, quan_max_in_, quan_max_out_, quan_max_params_);
+  quan.EditNetDescriptionIntegerPowerOf2Weights(&param);
+  // Bit-width of layer activations is hard-coded to 8-bit.
+  quan.EditNetDescriptionDynamicFixedPoint(&param, "Convolution_and_InnerProduct",
+      "Activations", -1, -1, 8, 8);
+  caffe::WriteProtoToTextFile(param, param_file);
+}
+
 void minifloat(char* param_file, int bitwidth, int exp_bits, char* new_param_file) {
   NetParameter param;
   caffe::ReadNetParamsFromTextFileOrDie(param_file, &param);
@@ -427,6 +438,7 @@ BOOST_PYTHON_MODULE(_caffe) {
   
   bp::def("getmaxin", &getmaxin);
   bp::def("getmaxout", &getmaxout);
+  bp::def("power_of_two", &power_of_two);
   bp::def("minifloat", &minifloat);
   bp::def("dynamicfixfloat", &dynamicfixfloat<Dtype>);
 
