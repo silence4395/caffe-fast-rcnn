@@ -71,10 +71,17 @@ void Log(const string& s) {
 
 void set_random_seed(unsigned int seed) { Caffe::set_random_seed(seed); }
 
-void fixfloat(/*string&*/char* param_file, int bitwidth, int exp_bits, /*string&*/char* new_param_file) {
+vector<float> getmaxin() {
+  return quan_max_in_;
+}
+
+vector<float> getmaxout() {
+  return quan_max_out_;
+}
+
+void minifloat(char* param_file, int bitwidth, int exp_bits, char* new_param_file) {
   NetParameter param;
   caffe::ReadNetParamsFromTextFileOrDie(param_file, &param);
-  //param.mutable_state()->set_phase(caffe::TEST);
   caffe::Quantization quan(exp_bits);
   quan.EditNetDescriptionMiniFloat(&param, bitwidth);
   caffe::WriteProtoToTextFile(param, new_param_file);
@@ -418,7 +425,9 @@ BOOST_PYTHON_MODULE(_caffe) {
 
   bp::def("layer_type_list", &LayerRegistry<Dtype>::LayerTypeList);
   
-  bp::def("fixfloat", &fixfloat/*, bp::arg("model", "bit_width")*/);
+  bp::def("getmaxin", &getmaxin);
+  bp::def("getmaxout", &getmaxout);
+  bp::def("minifloat", &minifloat);
   bp::def("dynamicfixfloat", &dynamicfixfloat<Dtype>);
 
   bp::enum_<Phase>("Phase")
