@@ -486,7 +486,8 @@ void Layer<Dtype>::ToProtoPrun(LayerParameter* param, bool write_diff, int num) 
     {
       for (int i = 0; i < blobs_.size(); ++i)
 	{
-	  if ((i == 0) && !strcmp(param->type().c_str(), "InnerProduct")) // i = 0: weight; i = 1:bias
+	  if ((i == 0) && (!strcmp(param->type().c_str(), "InnerProduct") ||
+			   !strcmp(param->type().c_str(), "FcRistretto"))) // i = 0: weight; i = 1:bias
 	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, true, num, FLAGS_idx_diff_fc);
 	  else
 	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, false, 0, 0);
@@ -496,7 +497,8 @@ void Layer<Dtype>::ToProtoPrun(LayerParameter* param, bool write_diff, int num) 
     {
       for (int i = 0; i < blobs_.size(); ++i)
 	{
-	  if ((i == 0) && !strcmp(param->type().c_str(), "Convolution"))
+	  if ((i == 0) && (!strcmp(param->type().c_str(), "Convolution") ||
+			   !strcmp(param->type().c_str(), "ConvolutionRistretto")))
 	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, true, num, FLAGS_idx_diff_conv);
 	  else
 	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, false, 0, 0);
@@ -506,9 +508,11 @@ void Layer<Dtype>::ToProtoPrun(LayerParameter* param, bool write_diff, int num) 
     {
       for (int i = 0; i < blobs_.size(); ++i)
 	{
-	  if ((i == 0) && !strcmp(param->type().c_str(), "Convolution"))
+	  if ((i == 0) && (!strcmp(param->type().c_str(), "Convolution") ||
+			   !strcmp(param->type().c_str(), "ConvolutionRistretto")))
 	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, false, 0, FLAGS_idx_diff_conv);
-	  else if ((i == 0) && !strcmp(param->type().c_str(), "InnerProduct"))
+	  else if ((i == 0) && (!strcmp(param->type().c_str(), "InnerProduct") ||
+				!strcmp(param->type().c_str(), "FcRistretto")))
 	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, false, 0, FLAGS_idx_diff_fc);
 	  else // bias
 	    blobs_[i]->ToProtoPrun(param->add_blobs(), write_diff, false, 0, 0);

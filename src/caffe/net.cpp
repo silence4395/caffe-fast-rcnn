@@ -868,7 +868,8 @@ void Net<Dtype>::CopyTrainedLayersFrom(const NetParameter& param) {
 	  for (int i = 0; i < source_layer.blobs(j).csc_quan_data_size(); ++i)
 	    if (source_layer.blobs(j).csc_quan_data(i) != 0)
 	      quan_index_[quan_idx].push_back(source_layer.blobs(j).csc_quan_data(i));
-	  LOG(INFO) << " >::< quan index: " << quan_idx << " quan num: " << quan_index_[quan_idx].size();
+	  quan_name_.push_back(source_layer_name.c_str());
+	  LOG(INFO) << " >::< quan layer: " << quan_name_[quan_idx] << " quan num: " << quan_index_[quan_idx].size();
 	  quan_idx++;
 	}
     }
@@ -967,9 +968,11 @@ void Net<Dtype>::ToProto(NetParameter* param, bool write_diff) const {
     else
       layers_[i]->ToProto(layer_param, write_diff);
 
-    if (FLAGS_prun_fc && !strcmp(layer_param->type().c_str(), "InnerProduct"))
+    if (FLAGS_prun_fc && (!strcmp(layer_param->type().c_str(), "InnerProduct") ||
+			  !strcmp(layer_param->type().c_str(), "FcRistretto")))
       fc_num++;
-    else if (FLAGS_prun_conv && !strcmp(layer_param->type().c_str(), "Convolution"))
+    else if (FLAGS_prun_conv && (!strcmp(layer_param->type().c_str(), "Convolution") ||
+				 !strcmp(layer_param->type().c_str(), "ConvolutionRistretto")))
       conv_num++;
 
     LOG(INFO) << "> here layer type: " << layer_param->type().c_str();
@@ -1077,26 +1080,75 @@ void Net<Dtype>::Update() {
       int conv_fc_boundry = learnable_params_.size() - FLAGS_prun_fc_num * 2;
       if (FLAGS_prun_fc)
 	{
+	  int name_idx_ = 0;
+	  int quan_update_idx = 0;
 	  for (int i = 0; i < learnable_params_.size(); ++i)
 	    {
+	      // Make sure a uniform quan data layer info and update layer info
+	      // lookup need backward layer name
+	      while(layers_[name_idx_]->param_propagate_down(0) == 0)
+		name_idx_++;
+	      // matching quan data layer name
+	      quan_update_idx = 0;
+	      while(strcmp(quan_name_[quan_update_idx].c_str(), layer_names_[name_idx_].c_str()) != 0)
+		quan_update_idx++;
+	      name_idx_++;
+	      // quan layer update
 	      if ((i >= conv_fc_boundry) &&  (i % 2 == 0))
 		{
-		  if (quan_index_[(i-conv_fc_boundry)/2].empty())
-		    LOG(FATAL) << " [Error] vector is empty( index: " << (i-conv_fc_boundry)/2 << " ).";
-		  int* quan_data = &quan_index_[(i-conv_fc_boundry)/2][0];
+		  if (quan_index_[quan_update_idx].empty())
+		    LOG(FATAL) << " [Error] vector is empty( index: " << quan_update_idx << " ).";
+		  int* quan_data = &quan_index_[quan_update_idx][0];
 		  learnable_params_[i]->Update_Quan(quan_data);
 		}
 	    }
 	}
       else if (FLAGS_prun_conv)
 	{
+	  int name_idx_ = 0;
+	  int quan_update_idx = 0;
 	  for (int i = 0; i < learnable_params_.size(); ++i)
 	    {
 	      if ((i < conv_fc_boundry) && (i % 2 == 0))
 		{
-		  if (quan_index_[i/2].empty())
-		    LOG(FATAL) << " [Error] vector is empty( index: " << i/2 << " ).";
-		  int *quan_data = &quan_index_[i/2][0];
+		  // Make sure a uniform quan data layer info and update layer info
+		  // lookup need backward layer name
+		  while(layers_[name_idx_]->param_propagate_down(0) == 0)
+		    name_idx_++;
+		  // matching quan data layer name
+		  quan_update_idx = 0;
+		  while(strcmp(quan_name_[quan_update_idx].c_str(), layer_names_[name_idx_].c_str()) != 0)
+		    quan_update_idx++;
+		  name_idx_++;
+		  // quan layer update 
+		  if (quan_index_[quan_update_idx].empty())
+		    LOG(FATAL) << " [Error] vector is empty( index: " << quan_update_idx << " ).";
+		  int *quan_data = &quan_index_[quan_update_idx][0];
+		  learnable_params_[i]->Update_Quan(quan_data);
+		}
+	    }
+	}
+      else if (FLAGS_sparse_csc)
+	{
+	  int name_idx_ = 0;
+	  int quan_update_idx = 0;
+	  for (int i = 0; i < learnable_params_.size(); ++i)
+	    {
+	      if (i % 2 == 0)
+		{
+		  // Make sure a uniform quan data layer info and update layer info
+		  // lookup need backward layer name
+		  while(layers_[name_idx_]->param_propagate_down(0) == 0)
+		    name_idx_++;
+		  // matching quan data layer name
+		  quan_update_idx = 0;
+		  while(strcmp(quan_name_[quan_update_idx].c_str(), layer_names_[name_idx_].c_str()) != 0)
+		    quan_update_idx++;
+		  name_idx_++;
+		  // quan layer update 
+		  if (quan_index_[quan_update_idx].empty())
+		    LOG(FATAL) << " [Error] vector is empty( index: " << quan_update_idx << " ).";
+		  int *quan_data = &quan_index_[quan_update_idx][0];
 		  learnable_params_[i]->Update_Quan(quan_data);
 		}
 	    }
