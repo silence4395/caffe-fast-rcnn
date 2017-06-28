@@ -1086,8 +1086,12 @@ void Net<Dtype>::Update() {
 	    {
 	      // Make sure a uniform quan data layer info and update layer info
 	      // lookup need backward layer name
-	      while(layers_[name_idx_]->param_propagate_down(0) == 0)
+	      while((layers_[name_idx_]->param_propagate_down(0) == 0) &&
+		    (name_idx_ < (layers_.size()-1)))
 		name_idx_++;
+	      if ((layers_[name_idx_]->param_propagate_down(0) == 0) &&
+		  (name_idx_ == (layers_.size()-1)))
+		break;
 	      // matching quan data layer name
 	      quan_update_idx = 0;
 	      while(strcmp(quan_name_[quan_update_idx].c_str(), layer_names_[name_idx_].c_str()) != 0)
@@ -1113,8 +1117,12 @@ void Net<Dtype>::Update() {
 		{
 		  // Make sure a uniform quan data layer info and update layer info
 		  // lookup need backward layer name
-		  while(layers_[name_idx_]->param_propagate_down(0) == 0)
+		  while((layers_[name_idx_]->param_propagate_down(0) == 0) &&
+			(name_idx_ < (layers_.size()-1)))
 		    name_idx_++;
+		  if ((layers_[name_idx_]->param_propagate_down(0) == 0) &&
+		      (name_idx_ == (layers_.size()-1)))
+		    break;
 		  // matching quan data layer name
 		  quan_update_idx = 0;
 		  while(strcmp(quan_name_[quan_update_idx].c_str(), layer_names_[name_idx_].c_str()) != 0)
@@ -1138,8 +1146,12 @@ void Net<Dtype>::Update() {
 		{
 		  // Make sure a uniform quan data layer info and update layer info
 		  // lookup need backward layer name
-		  while(layers_[name_idx_]->param_propagate_down(0) == 0)
+		  while((layers_[name_idx_]->param_propagate_down(0) == 0) &&
+			(name_idx_ < (layers_.size()-1)))
 		    name_idx_++;
+		  if ((layers_[name_idx_]->param_propagate_down(0) == 0) &&
+		      (name_idx_ == (layers_.size()-1)))
+		    break;
 		  // matching quan data layer name
 		  quan_update_idx = 0;
 		  while(strcmp(quan_name_[quan_update_idx].c_str(), layer_names_[name_idx_].c_str()) != 0)
