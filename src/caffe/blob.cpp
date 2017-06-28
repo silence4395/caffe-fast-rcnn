@@ -585,13 +585,9 @@ template <> void Blob<int>::Update_Prun() { NOT_IMPLEMENTED; }
 
 template <typename Dtype>
 void Blob<Dtype>::Update_Prun() {
-  // We will perform update based on where the data is located.
+  // We will perform update only CPU mode.
   Dtype *diff_val_cpu = (Dtype*)diff_->cpu_data();
   Dtype *weight_val_cpu = static_cast<Dtype*>(data_->mutable_cpu_data());
-#ifndef CPU_ONLY
-  Dtype *diff_val_gpu = (Dtype*)diff_->gpu_data();
-  Dtype *weight_val_gpu = static_cast<Dtype*>(data_->mutable_cpu_data());
-#endif
 
   switch (data_->head()) {
   case SyncedMemory::HEAD_AT_CPU:
@@ -607,24 +603,6 @@ void Blob<Dtype>::Update_Prun() {
 			weight_val_cpu);
       break;
     }
-  case SyncedMemory::HEAD_AT_GPU:
-  case SyncedMemory::SYNCED:
-    {
-#ifndef CPU_ONLY
-      // perform computation on GPU
-      for (int i = 0; i < count_; i++)
-	if (weight_val_gpu[i] == 0)
-	  {
-	    diff_val_gpu[i] = 0;
-	  }
-      caffe_gpu_axpy<Dtype>(count_, Dtype(-1),
-			    static_cast<const Dtype*>(diff_val_gpu),
-			    weight_val_gpu);
-#else
-      NO_GPU;
-#endif
-      break;
-    }
   default:
     LOG(FATAL) << "Syncedmem not initialized.";
   }
@@ -632,14 +610,10 @@ void Blob<Dtype>::Update_Prun() {
 
 template <typename Dtype>
 void Blob<Dtype>::Update_Quan(int* quan_data) {
-  // We will perform update based on where the data is located.
+  // We will perform update only CPU mode
   int index = 0;
   Dtype *diff_val_cpu = (Dtype*)diff_->cpu_data();
   Dtype *weight_val_cpu = static_cast<Dtype*>(data_->mutable_cpu_data());
-#ifndef CPU_ONLY
-  Dtype *diff_val_gpu = (Dtype*)diff_->gpu_data();
-  Dtype *weight_val_gpu = static_cast<Dtype*>(data_->mutable_cpu_data());
-#endif
 
   switch (data_->head()) {
   case SyncedMemory::HEAD_AT_CPU:
@@ -662,34 +636,6 @@ void Blob<Dtype>::Update_Quan(int* quan_data) {
       for (int i = 0; i < count_; ++i)
 	if (weight_val_cpu[i] != 0)
 	  weight_val_cpu[i] -= diff_sum[quan_data[index++]-1];
-      break;
-    }
-  case SyncedMemory::HEAD_AT_GPU:
-  case SyncedMemory::SYNCED:
-    {
-#ifndef CPU_ONLY
-      // perform computation on GPU
-      int centroid_max_num = 1 << FLAGS_quan_k_max;
-      Dtype diff_sum[centroid_max_num];
-
-      for (int i = 0; i < centroid_max_num; ++i)
-	diff_sum[i] = 0;
-      
-      index = 0;
-      for (int i = 0; i < count_; ++i)
-	if (weight_val_gpu[i] != 0)
-	  diff_sum[quan_data[index++]-1] += diff_val_gpu[i];
-      
-      for (int i = 0; i < centroid_max_num; ++i)
-	diff_sum[i] = diff_sum[i] * FLAGS_quan_lr;
-      
-      index = 0;
-      for (int i = 0; i < count_; ++i)
-	if (weight_val_gpu[i] != 0)
-	  weight_val_gpu[i] -= diff_sum[quan_data[index++]-1];
-#else
-      NO_GPU;
-#endif
       break;
     }
   default:
