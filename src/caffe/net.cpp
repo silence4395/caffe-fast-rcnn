@@ -422,7 +422,8 @@ void Net<Dtype>::RangeInLayers(vector<string>* layer_name,
   if(layer_name->size()==0) {
     for (int layer_id = 0; layer_id < layers_.size(); ++layer_id) {
       if (strcmp(layers_[layer_id]->type(), "Convolution") == 0 ||
-          strcmp(layers_[layer_id]->type(), "InnerProduct") == 0) {
+          strcmp(layers_[layer_id]->type(), "InnerProduct") == 0 ||
+	  strcmp(layers_[layer_id]->type(), "LRN") == 0) {
         layer_name->push_back(this->layer_names()[layer_id]);
         max_in->push_back(0);
         max_out->push_back(0);
@@ -435,15 +436,26 @@ void Net<Dtype>::RangeInLayers(vector<string>* layer_name,
   Dtype max_val;
   for (int layer_id = 0; layer_id < layers_.size(); ++layer_id) {
     if (strcmp(layers_[layer_id]->type(), "Convolution") == 0 ||
-          strcmp(layers_[layer_id]->type(), "InnerProduct") == 0) {
+	strcmp(layers_[layer_id]->type(), "InnerProduct") == 0 ||
+	strcmp(layers_[layer_id]->type(), "LRN") == 0) {
       max_val = findMax(bottom_vecs_[layer_id][0]);
       max_in->at(index) = std::max(max_in->at(index), max_val);
       max_val = findMax(top_vecs_[layer_id][0]);
       max_out->at(index) = std::max(max_out->at(index), max_val);
       // Consider the weights only, ignore the bias
-      max_val = findMax(&(*layers_[layer_id]->blobs()[0]));
-      max_param->at(index) = std::max(max_param->at(index), max_val);
-      LOG(INFO) << " [ " << index << "INFO ] name: " << layer_names_[layer_id] << ", max in: " << max_in->at(index) << ", max out: " << max_out->at(index) << ", max param: " << max_param->at(index);
+      //max_val = findMax(&(*layers_[layer_id]->blobs()[0]));
+      //max_param->at(index) = std::max(max_param->at(index), max_val);
+      if (strcmp(layers_[layer_id]->type(), "LRN") == 0) 
+	{
+	  max_param->at(index) = 0;
+	  LOG(INFO) << " [ " << index << "INFO ] name: " << layer_names_[layer_id] << ", max in: " << max_in->at(index) << ", max out: " << max_out->at(index) ;
+	}
+      else
+	{
+	  max_val = findMax(&(*layers_[layer_id]->blobs()[0]));
+	  max_param->at(index) = std::max(max_param->at(index), max_val);
+	  LOG(INFO) << " [ " << index << "INFO ] name: " << layer_names_[layer_id] << ", max in: " << max_in->at(index) << ", max out: " << max_out->at(index) << ", max param: " << max_param->at(index);
+	}
       index++;
     }
   }
