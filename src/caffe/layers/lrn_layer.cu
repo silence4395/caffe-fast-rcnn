@@ -2,7 +2,7 @@
 
 #include "caffe/layers/lrn_layer.hpp"
 #include "caffe/util/math_functions.hpp"
-
+#include <curand_kernel.h>
 namespace caffe {
 
 template <typename Dtype>
@@ -51,6 +51,56 @@ __global__ void LRNFillScale(const int nthreads, const Dtype* const in,
   }
 }
 
+__device__ __forceinline__ double
+RandUniform_device(const int index) {
+  curandState state;
+  curand_init( (unsigned long long) clock() + index, 0, 0, &state);
+  return curand_uniform_double(&state);
+}
+
+template <typename Dtype>
+__device__ void FixedPointSigmoidQuan(Dtype* data, const int bit_width, const int fl, const int rounding) {
+        Dtype max_data = (powf(2, bit_width - 1) - 1) * powf(2, -fl);
+        Dtype min_data = -powf(2, bit_width - 1) * powf(2, -fl);
+        *data = fmax(fmin(*data, max_data), min_data);
+        // Round data
+        *data /= powf(2, -fl);
+        switch (rounding) {
+        case 0: // NEAREST
+          *data = rint(*data);
+          break;
+        case 1: // STOCHASTIC
+          *data = __float2int_rd(*data + RandUniform_device(0));
+          break;
+        default:
+          break;
+        }
+        *data *= powf(2, -fl);
+}
+
+template <typename Dtype>
+__device__ void FixedPointQuan(Dtype* data, const int cnt,
+	                       const int bit_width, const int fl, const int rounding) {
+    CUDA_KERNEL_LOOP(index, cnt) {
+        Dtype max_data = (powf(2, bit_width - 1) - 1) * powf(2, -fl);
+        Dtype min_data = -powf(2, bit_width - 1) * powf(2, -fl);
+        data[index] = fmax(fmin(data[index], max_data), min_data);
+        // Round data
+        data[index] /= powf(2, -fl);
+        switch (rounding) {
+        case 0: // NEAREST
+          data[index] = rint(data[index]);
+          break;
+        case 1: // STOCHASTIC
+          data[index] = __float2int_rd(data[index] + RandUniform_device(index));
+          break;
+        default:
+          break;
+        }
+        data[index] *= powf(2, -fl);	
+    }
+}
+
 
 template <typename Dtype>
 void LRNLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
@@ -70,7 +120,8 @@ void LRNLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
 // add by zhluo, 9/2/2017
 template <typename Dtype>
 __global__ void AREASApproximateCompute(const int n_threads, const Dtype* const bottom,
-	                                const Dtype* in, Dtype* out) {
+	                                const Dtype* in, Dtype* out, int fixed_point,
+					int bit_width_in, int fl_in, int bit_width_out, int fl_out) {
          float variable[22] = {1.25, 1.5, 1.75, 2 , 3 , 4 , 5  , 6  , 7  , 8  ,
 			       9   , 10 , 20  , 30, 40, 50, 100, 150, 200, 300,
 			       400, 500};
@@ -92,22 +143,42 @@ __global__ void AREASApproximateCompute(const int n_threads, const Dtype* const 
 	                      0.0179774698891};
 	 int length = sizeof(coefficient) / sizeof(coefficient[0]);
 	 
+	 Dtype pass_region = 0.005;
+	 Dtype input_data;
+	 Dtype bottom_data;
+	 if (fixed_point) {
+	     FixedPointSigmoidQuan(&pass_region, bit_width_out, bit_width_out-1, 0);
+	     FixedPointQuan(variable, length, bit_width_in, fl_in+4, 0);
+	     FixedPointQuan(coefficient, length, bit_width_out, bit_width_out-1, 0);
+	     FixedPointQuan(const_b, length, bit_width_out, bit_width_out-1, 0);
+	 }
+	 
 	 CUDA_KERNEL_LOOP(index_d, n_threads) {
-	     if (in[index_d] < 1)
-	         ;
-	     else if (in[index_d] > 500)
-	         out[index_d] = 0.005;
+	     input_data = in[index_d];
+	     if (fixed_point)
+	     	 FixedPointSigmoidQuan(&input_data, bit_width_in, fl_in+4, 0);
+	     if (input_data > 500)
+	         out[index_d] = pass_region;
 	     else {
 		 for(int index_v = 0; index_v < length; ++index_v) {
-	             if (in[index_d] < variable[index_v]) {
-	                 out[index_d] = coefficient[index_v] * in[index_d] + const_b[index_v];
+	             if (input_data < variable[index_v]) {
+	                 out[index_d] = coefficient[index_v] * input_data + const_b[index_v];
 	                 break;
 	             }
 	         }
 	     }
-	     out[index_d] = out[index_d] * bottom[index_d];
+	     bottom_data = bottom[index_d];
+	     if (fixed_point) {
+	     	FixedPointSigmoidQuan(&(out[index_d]), bit_width_out, bit_width_out-1, 0);
+		FixedPointSigmoidQuan(&bottom_data, bit_width_in, fl_in, 0);
+	     }
+	     
+	     out[index_d] = out[index_d] * bottom_data;
+	     
+	     if (fixed_point) {
+	         FixedPointSigmoidQuan(&(out[index_d]), bit_width_out, fl_out, 0);
+	     }
 	 }
-  
 }
 
 template <typename Dtype>
@@ -381,6 +452,7 @@ __global__ void LUT400ApproximateCompute(const int n_threads, const Dtype* const
 	 }  
 }
 
+
 // TODO: check if it would be faster to just put it into the previous kernel.
 template <typename Dtype>
 __global__ void LRNComputeOutput(const int nthreads, const Dtype* const in,
@@ -404,6 +476,7 @@ void LRNLayer<Dtype>::CrossChannelForward_gpu(
   LRNFillScale<<<CAFFE_GET_BLOCKS(n_threads), CAFFE_CUDA_NUM_THREADS>>>(
       n_threads, bottom_data, num_, channels_, height_, width_, size_,
       alpha_ / size_, k_, scale_data);
+
   CUDA_POST_KERNEL_CHECK;
   n_threads = bottom[0]->count();
   // NOLINT_NEXT_LINE(whitespace/operators)
@@ -416,8 +489,13 @@ void LRNLayer<Dtype>::CrossChannelForward_gpu(
        LUT_400 = 3
   } op_type;
   
-  op_type = LUT_400;
-  
+  op_type = POWER;
+  int fixed_point = 0;
+  int bit_width_in = 8;
+  int fl_in = -5;
+  int bit_width_out = 8;
+  int fl_out = -3;
+    
   switch(op_type) {
      case POWER:
       {
@@ -428,7 +506,8 @@ void LRNLayer<Dtype>::CrossChannelForward_gpu(
      case AREAS:
       {
         AREASApproximateCompute<<<CAFFE_GET_BLOCKS(n_threads), CAFFE_CUDA_NUM_THREADS>>>(
-          n_threads, bottom_data, scale_data, top_data);
+          n_threads, bottom_data, scale_data, top_data, fixed_point,
+	  bit_width_in, fl_in, bit_width_out, fl_out);
 	break;
       }
      case LUT_198:

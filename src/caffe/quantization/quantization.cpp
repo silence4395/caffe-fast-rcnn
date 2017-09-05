@@ -268,7 +268,7 @@ void Quantization::Quantize2DynamicFixedPoint() {
   vector<int> test_bw_layer_activations;
   vector<float> test_scores_layer_activations;
   for (int bitwidth = 16; bitwidth > 0; bitwidth /= 2) {
-    EditNetDescriptionDynamicFixedPoint(&param, "Convolution_and_InnerProduct",
+    EditNetDescriptionDynamicFixedPoint(&param, "Convolution_and_InnerProduct_and_LRN",
 	"Activations", -1, -1, bitwidth, bitwidth);
     net_test = new Net<float>(param/*, NULL*/);
     net_test->CopyTrainedLayersFrom(weights_);
@@ -312,7 +312,7 @@ void Quantization::Quantize2DynamicFixedPoint() {
   LOG(INFO) << " [ INFO ] DynamicFixedPoint: Select Convolution and InnerProduct Parameters and Activations. ";
   caffe::ReadNetParamsFromTextFileOrDie(model_, &param);
   param.mutable_state()->set_phase(caffe::TEST);
-  EditNetDescriptionDynamicFixedPoint(&param, "Convolution_and_InnerProduct",
+  EditNetDescriptionDynamicFixedPoint(&param, "Convolution_and_InnerProduct_and_LRN",
       "Parameters_and_Activations", bw_conv_params_, bw_fc_params_, bw_in_,
       bw_out_);
   net_test = new Net<float>(param/*, NULL*/);
@@ -496,6 +496,23 @@ void Quantization::EditNetDescriptionDynamicFixedPoint(NetParameter* param,
       if (net_part.find("Activations") != string::npos) {
 	LayerParameter* param_layer = param->mutable_layer(i);
 	param_layer->set_type("FcRistretto");
+	param_layer->mutable_quantization_param()->set_fl_layer_in(bw_in - 1 -
+	    GetIntegerLengthIn(param->layer(i).name()) );
+	param_layer->mutable_quantization_param()->set_bw_layer_in(bw_in);
+	param_layer->mutable_quantization_param()->set_fl_layer_out(bw_out - 1 -
+	    GetIntegerLengthOut(param->layer(i).name()) );
+	param_layer->mutable_quantization_param()->set_bw_layer_out(bw_out);
+      }
+    }
+    
+    // if this is an LRN layer which should be quantized ...
+    if (layers_2_quantize.find("LRN") != string::npos &&
+	(param->layer(i).type().find("LRN") != string::npos ||
+	param->layer(i).type().find("LRNRistretto") != string::npos)) {
+      // quantize activations
+      if (net_part.find("Activations") != string::npos) {
+	LayerParameter* param_layer = param->mutable_layer(i);
+	param_layer->set_type("LRNRistretto");
 	param_layer->mutable_quantization_param()->set_fl_layer_in(bw_in - 1 -
 	    GetIntegerLengthIn(param->layer(i).name()) );
 	param_layer->mutable_quantization_param()->set_bw_layer_in(bw_in);

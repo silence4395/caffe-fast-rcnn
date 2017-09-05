@@ -1,8 +1,8 @@
 #include <vector>
 
+#include "quantization/base_ristretto_layer.hpp"
 #include "caffe/layers/lrn_layer.hpp"
 #include "caffe/util/math_functions.hpp"
-#include "quantization/base_ristretto_layer.hpp"
 
 namespace caffe {
 
@@ -13,14 +13,20 @@ LRNRistrettoLayer<Dtype>::LRNRistrettoLayer(const LayerParameter& param)
   this->rounding_ = this->layer_param_.quantization_param().rounding_scheme();
   switch (this->precision_) {
   case QuantizationParameter_Precision_DYNAMIC_FIXED_POINT:
-    LOG(FATAL) << "LRN layer only supports minifloat";
+    this->bw_layer_in_ = this->layer_param_.quantization_param().bw_layer_in();
+    this->bw_layer_out_ = this->layer_param_.quantization_param().bw_layer_out();
+    this->fl_layer_in_ = this->layer_param_.quantization_param().fl_layer_in();
+    this->fl_layer_out_ = this->layer_param_.quantization_param().fl_layer_out();
     break;
   case QuantizationParameter_Precision_MINIFLOAT:
     this->fp_mant_ = this->layer_param_.quantization_param().mant_bits();
     this->fp_exp_ = this->layer_param_.quantization_param().exp_bits();
     break;
   case QuantizationParameter_Precision_INTEGER_POWER_OF_2_WEIGHTS:
-    LOG(FATAL) << "LRN layer only supports minifloat";
+    this->bw_layer_in_ = this->layer_param_.quantization_param().bw_layer_in();
+    this->bw_layer_out_ = this->layer_param_.quantization_param().bw_layer_out();
+    this->fl_layer_in_ = this->layer_param_.quantization_param().fl_layer_in();
+    this->fl_layer_out_ = this->layer_param_.quantization_param().fl_layer_out();
     break;
   default:
     LOG(FATAL) << "Unknown precision mode: " << this->precision_;

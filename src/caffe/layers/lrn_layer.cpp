@@ -108,6 +108,35 @@ template <typename Dtype>
 void LRNLayer<Dtype>::CrossChannelForward_cpu(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
   const Dtype* bottom_data = bottom[0]->cpu_data();
+  
+  Dtype max_data = 0.0;
+  Dtype min_data = 99999.0;
+  int region[23];
+  float point[23] = {1.25, 1.5, 1.75, 2 , 3 , 4 , 5  , 6  , 7  , 8  ,
+		     9   , 10 , 20  , 30, 40, 50, 100, 150, 200, 300,
+		     400, 500, 1000};
+  int length = sizeof(point)/sizeof(point[0]);
+  
+  for (int i = 0; i < length; ++i)
+    region[i] = 0;
+  
+  for (int i = 0; i < scale_.count(); ++i) {
+    if (fabs(bottom_data[i]) > max_data)
+       max_data = fabs(bottom_data[i]);
+    if (fabs(bottom_data[i]) < min_data)
+      min_data = fabs(bottom_data[i]);
+     
+    for (int j = 0; j < length; ++j)
+      if (fabs(bottom_data[i]) < point[j]) {
+	region[j]++;
+	break;
+      }
+  }
+  
+  LOG(INFO) << " [ Info ] max_data: " << max_data << ", min_data: " << min_data;
+  for (int j = 0; j < length; ++j)
+    LOG(INFO) << " [ Info ] region " << point[j] << ", total num: " << region[j];
+  
   Dtype* top_data = top[0]->mutable_cpu_data();
   Dtype* scale_data = scale_.mutable_cpu_data();
   // start with the constant value

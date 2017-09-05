@@ -170,6 +170,8 @@ class LRNRistrettoLayer : public LRNLayer<Dtype>,
     const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
   virtual void CrossChannelForward_gpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
+  virtual void CrossChannelForwardFixedPoint_gpu(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
 };
 
 }  // namespace caffe
