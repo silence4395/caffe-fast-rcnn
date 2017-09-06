@@ -1,0 +1,1 @@
+./build/examples/cpp_classification/classification.bin models/bvlc_alexnet/deploy.prototxt models/bvlc_alexnet/bvlc_alexnet.caffemodel  data/ilsvrc12/imagenet_mean.binaryproto /mllib/imagenet/ilsvrc12/synset_words.txt examples/images/cat.jpg 

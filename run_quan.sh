@@ -1,0 +1,1 @@
+./build/tools/quantization quantize --model=models/bvlc_alexnet/train_val.prototxt --weights=models/bvlc_alexnet/bvlc_alexnet.caffemodel --model_quantized=models/bvlc_alexnet/quan.prototxt --iterations=100 --gpu=0 --trimming_mode=dynamic_fixed_point 
