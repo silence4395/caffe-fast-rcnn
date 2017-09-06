@@ -1,0 +1,2 @@
+LRN_TYPE             BITWIDTH             FRACTION             TOP-1                TOP-5               
+POWER                8                    -1                   0.0012               0.0056              

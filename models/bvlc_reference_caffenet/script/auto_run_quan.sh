@@ -64,6 +64,8 @@ function RecoverPowerLayer()
 {
     awk -F ' ' '{if(($1 == "op_type") && ($2 == "="))
                     {print " " " " $1 " " $2 " " "POWER;"}
+                  else if (($1 == "int") && ($2 == "fixed_point") && ($3 == "="))
+                     {print " " " " $1 " " $2 " " $3 " " "0;"}
                  else
                     {print $0;} }' power_layer.cu  >| tmp.cu
     mv tmp.cu power_layer.cu
@@ -73,6 +75,8 @@ function RecoverLRNLayer()
 {
     awk -F ' ' '{ if(($1 == "op_type") && ($2 == "="))
                      {print " " " " $1 " " $2 " " "POWER;"}
+                  else if (($1 == "int") && ($2 == "fixed_point") && ($3 == "="))
+                     {print " " " " $1 " " $2 " " $3 " " "0;"}
                   else
                      {print $0;} }' lrn_layer.cu >| tmp.cu
     mv tmp.cu lrn_layer.cu
@@ -82,6 +86,8 @@ function RecoverLRNRistrettOLayer()
 {
     awk -F ' ' '{ if(($1 == "op_type") && ($2 == "="))
                       {print " " " " $1 " " $2 " " "POWER;"}
+                  else if (($1 == "bool") && ($2 == "fixed_point") && ($3 == "="))
+                     {print " " " " $1 " " $2 " " $3 " " "0;"}
                   else
                       {print $0;} }' lrn_ristretto_layer.cu >| tmp.cu
     mv tmp.cu lrn_ristretto_layer.cu
@@ -118,3 +124,6 @@ RecoverPowerLayer
 RecoverLRNLayer
 cd ../quantization/layers
 RecoverLRNRistrettOLayer
+
+cd ../../../../
+make -j
