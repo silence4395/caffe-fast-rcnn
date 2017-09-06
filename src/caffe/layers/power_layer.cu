@@ -2,12 +2,70 @@
 
 #include "caffe/layers/power_layer.hpp"
 #include "caffe/util/math_functions.hpp"
+#include <curand_kernel.h>
 
 namespace caffe {
 
+// add by zhluo, 9/2/2017
+
+// Returns a random number in (0,1].
+// Even though the repetitive initialization of a curand state might look
+// suboptimal, the performance is actually nearly the same as when using global
+// states.
+__device__ __forceinline__ double
+RandUniform_device(const int index) {
+  curandState state;
+  curand_init( (unsigned long long) clock() + index, 0, 0, &state);
+  return curand_uniform_double(&state);
+}
+
+template <typename Dtype>
+__device__ void FixedPointSigmoidQuan(Dtype* data, const int bit_width, const int fl, const int rounding) {
+        Dtype max_data = (powf(2, bit_width - 1) - 1) * powf(2, -fl);
+        Dtype min_data = -powf(2, bit_width - 1) * powf(2, -fl);
+        *data = fmax(fmin(*data, max_data), min_data);
+        // Round data
+        *data /= powf(2, -fl);
+        switch (rounding) {
+        case 0: // NEAREST
+          *data = rint(*data);
+          break;
+        case 1: // STOCHASTIC
+          *data = __float2int_rd(*data + RandUniform_device(0));
+          break;
+        default:
+          break;
+        }
+        *data *= powf(2, -fl);
+}
+
+template <typename Dtype>
+__device__ void FixedPointQuan(Dtype* data, const int cnt,
+	                       const int bit_width, const int fl, const int rounding) {
+    CUDA_KERNEL_LOOP(index, cnt) {
+        Dtype max_data = (powf(2, bit_width - 1) - 1) * powf(2, -fl);
+        Dtype min_data = -powf(2, bit_width - 1) * powf(2, -fl);
+        data[index] = fmax(fmin(data[index], max_data), min_data);
+        // Round data
+        data[index] /= powf(2, -fl);
+        switch (rounding) {
+        case 0: // NEAREST
+          data[index] = rint(data[index]);
+          break;
+        case 1: // STOCHASTIC
+          data[index] = __float2int_rd(data[index] + RandUniform_device(index));
+          break;
+        default:
+          break;
+        }
+        data[index] *= powf(2, -fl);	
+    }
+}
+
 // add by zhluo, 8/30/2017
 template <typename Dtype>
-__global__ void AREASApproximateCompute(const int count, const Dtype* in, Dtype* out) {
+__global__ void AREASApproximateCompute(const int count, const Dtype* in, Dtype* out,
+	                                int fixed_point, int bit_width, int fl) {
          float variable[22] = {1.25, 1.5, 1.75, 2 , 3 , 4 , 5  , 6  , 7  , 8  ,
 			       9   , 10 , 20  , 30, 40, 50, 100, 150, 200, 300,
 			       400, 500};
@@ -29,25 +87,42 @@ __global__ void AREASApproximateCompute(const int count, const Dtype* in, Dtype*
 	                      0.0179774698891};
 	 int length = sizeof(coefficient) / sizeof(coefficient[0]);
 	 
+	 Dtype pass_region = 0.005;
+	 Dtype max_region = 500;
+	 Dtype lut_index;
+	 if (fixed_point) {  
+	    FixedPointSigmoidQuan(&pass_region, bit_width, bit_width-1, 0);
+	    FixedPointSigmoidQuan(&max_region, bit_width, fl, 0);
+	    FixedPointQuan(variable, length, bit_width, fl, 0);
+	    FixedPointQuan(coefficient, length, bit_width, bit_width-1, 0);
+	    FixedPointQuan(const_b, length, bit_width, bit_width-1, 0);
+	 }
+	 
 	 CUDA_KERNEL_LOOP(index_d, count) {
-	     if (in[index_d] < 1)
-	         ;
-	     else if (in[index_d] > 500)
-	         out[index_d] = 0.005;
+	     lut_index = in[index_d];
+	     if (fixed_point) {
+	     	FixedPointSigmoidQuan(&lut_index, bit_width, fl, 0);
+	     }
+	     
+	     if (lut_index > max_region)
+	         out[index_d] = pass_region;
 	     else {
 		 for(int index_v = 0; index_v < length; ++index_v) {
-	             if (in[index_d] < variable[index_v]) {
-	                 out[index_d] = coefficient[index_v] * in[index_d] + const_b[index_v];
+	             if (lut_index < variable[index_v]) {
+	                 out[index_d] = coefficient[index_v] * lut_index + const_b[index_v];
 	                 break;
 	             }
 	         }
 	     }
+	     if (fixed_point)
+	         FixedPointSigmoidQuan(&(out[index_d]), bit_width, bit_width-1, 0);
 	 }
   
 }
 
 template <typename Dtype>
-__global__ void LUT198ApproximateCompute(const int count, const Dtype* in, Dtype* out) {
+__global__ void LUT198ApproximateCompute(const int count, const Dtype* in, Dtype* out,
+                                         int fixed_point, int bit_width, int fl) {
          float variable[198] = {1.015625, 1.03125 , 1.046875, 1.0625  , 1.078125, 1.09375 , 1.109375,
 	                        1.125   , 1.140625, 1.15625 , 1.171875, 1.1875  , 1.203125, 1.21875 ,
 				1.234375, 1.25	  , 1.265625, 1.28125 , 1.296875, 1.3125  , 1.328125,
@@ -130,12 +205,27 @@ __global__ void LUT198ApproximateCompute(const int count, const Dtype* in, Dtype
           		      0.0224271604857236, 0.01734880445246167};
          int length = sizeof(values) / sizeof(values[0]);
 	 
+	 Dtype pass_region = 0.01;
+	 Dtype max_region = 256;
+	 Dtype lut_index;
+	 if (fixed_point) {
+             FixedPointSigmoidQuan(&pass_region, bit_width, bit_width-1, 0);
+	     FixedPointSigmoidQuan(&max_region, bit_width, fl, 0);
+	     FixedPointQuan(variable, length, bit_width, fl, 0);
+	     FixedPointQuan(values, length, bit_width, bit_width-1, 0);
+	 }
+	 	 
 	 CUDA_KERNEL_LOOP(index_d, count) {
-	     if (in[index_d] > 256)
-	         out[index_d] = 0.01;
+	     lut_index = in[index_d];
+	     if (fixed_point) {
+	     	FixedPointSigmoidQuan(&lut_index, bit_width, fl, 0);
+	     }
+	     
+	     if (lut_index > max_region)
+	         out[index_d] = pass_region;
 	     else {
 	         for(int index_v = 0; index_v < length; ++index_v) {
-		     if (in[index_d] < variable[index_v]) {
+		     if (lut_index < variable[index_v]) {
 		         out[index_d] = values[index_v];
 			 break;
                      }
@@ -145,7 +235,8 @@ __global__ void LUT198ApproximateCompute(const int count, const Dtype* in, Dtype
 }
 
 template <typename Dtype>
-__global__ void LUT400ApproximateCompute(const int count, const Dtype* in, Dtype* out) {
+__global__ void LUT400ApproximateCompute(const int count, const Dtype* in, Dtype* out,
+	                                int fixed_point, int bit_width, int fl) {
          float variable[400] = {1.0078125, 1.015625, 1.0234375, 1.03125, 1.0390625, 1.046875, 1.0546875, 1.0625, 
 	                        1.0703125, 1.078125, 1.0859375, 1.09375, 1.1015625, 1.109375, 1.1171875, 1.125 ,
 				1.1328125, 1.140625, 1.1484375, 1.15625, 1.1640625, 1.171875, 1.1796875, 1.1875,
@@ -298,19 +389,56 @@ __global__ void LUT400ApproximateCompute(const int count, const Dtype* in, Dtype
 			      0.0133352473242522, 0.0103156522710535, 0.0079291833105098, 0.0061337226885514
  			   };
         int length = sizeof(values) / sizeof(values[0]);
-			   
+		
+	Dtype pass_region = 0.005;
+	 Dtype max_region = 1024;
+	 Dtype lut_index;
+	 if (fixed_point) {
+             FixedPointSigmoidQuan(&pass_region, bit_width, bit_width-1, 0);
+	     FixedPointSigmoidQuan(&max_region, bit_width, fl, 0);
+	     FixedPointQuan(variable, length, bit_width, fl, 0);
+	     FixedPointQuan(values, length, bit_width, bit_width-1, 0);
+	 }
+	 	   
         CUDA_KERNEL_LOOP(index_d, count) {
-	     if (in[index_d] > 1024)
-	         out[index_d] = 0.005;
+	     lut_index = in[index_d];
+	     if (fixed_point) {
+	     	FixedPointSigmoidQuan(&lut_index, bit_width, fl, 0);
+	     }
+	     
+	     if (lut_index > max_region)
+	         out[index_d] = pass_region;
 	     else {
 	         for(int index_v = 0; index_v < length; ++index_v) {
-		     if (in[index_d] < variable[index_v]) {
+		     if (lut_index < variable[index_v]) {
 		         out[index_d] = values[index_v];
 			 break;
 		     }
 	         }
 	     }
 	 }  
+}
+
+template <typename Dtype>
+void FixedPoint(Dtype* data, const int cnt, const int bit_width, const int fl, const int rounding) {
+     for(int index = 0; index < cnt; ++index) {
+        Dtype max_data = (powf(2, bit_width - 1) - 1) * powf(2, -fl);
+        Dtype min_data = -powf(2, bit_width - 1) * powf(2, -fl);
+        data[index] = fmax(fmin(data[index], max_data), min_data);
+        // Round data
+        data[index] /= powf(2, -fl);
+        switch (rounding) {
+        case 0: // NEAREST
+          data[index] = rint(data[index]);
+          break;
+        case 1: // STOCHASTIC
+          data[index] = __float2int_rd(data[index] + (rand() / (RAND_MAX+1.0)));
+          break;
+        default:
+          break;
+        }
+        data[index] *= powf(2, -fl);	
+    }
 }
 
 template <typename Dtype>
@@ -347,10 +475,15 @@ void PowerLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   } op_type;
   
   op_type = POWER;
+  int fixed_point = 0;
+  int bit_width = 8;
+  int fl = 2;
   
   switch(op_type) {
      case POWER:
       {
+         if (fixed_point == 1)
+	     FixedPoint(top_data, count, bit_width, fl, 0);
          caffe_gpu_powx(count, top_data, power_, top_data);
       	 break;
       }
@@ -358,7 +491,7 @@ void PowerLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       {
         CUDA_POST_KERNEL_CHECK;
         AREASApproximateCompute<<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(
-          count, top_data, top_data);
+          count, top_data, top_data, fixed_point, bit_width, fl);
         CUDA_POST_KERNEL_CHECK;
 	break;
       }
@@ -366,7 +499,7 @@ void PowerLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       {
         CUDA_POST_KERNEL_CHECK;
         LUT198ApproximateCompute<<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(
-          count, top_data, top_data);
+          count, top_data, top_data, fixed_point, bit_width, fl);
         CUDA_POST_KERNEL_CHECK;
 	break;
       }
@@ -374,7 +507,7 @@ void PowerLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       {
         CUDA_POST_KERNEL_CHECK;
         LUT400ApproximateCompute<<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(
-          count, top_data, top_data);
+          count, top_data, top_data, fixed_point, bit_width, fl);
         CUDA_POST_KERNEL_CHECK;
 	break;
       }

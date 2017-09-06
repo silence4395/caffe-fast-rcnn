@@ -95,7 +95,7 @@ void LRNRistrettoLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
 	LOG(FATAL) << "Unknow trimming mode: " << this->precision_;
     break;
   case LRNParameter_NormRegion_WITHIN_CHANNEL:
-  WithinChannelForward(bottom, top);
+    WithinChannelForward(bottom, top);
     break;
   default:
     LOG(FATAL) << "Unknown normalization region.";
@@ -196,6 +196,7 @@ __global__ void LRNFillScale(const int nthreads, const Dtype* const in,
   }
 }
 
+// add by zhluo, 9/2/2017
 template <typename Dtype>
 __device__ void FixedPointSigmoidQuan(Dtype* data, const int bit_width, const int fl, const int rounding) {
         Dtype max_data = (powf(2, bit_width - 1) - 1) * powf(2, -fl);
@@ -239,7 +240,6 @@ __device__ void FixedPointQuan(Dtype* data, const int cnt,
     }
 }
 
-// add by zhluo, 9/2/2017
 template <typename Dtype>
 __global__ void AREASApproximateCompute(const int n_threads, const Dtype* const bottom,
 	                                const Dtype* in, Dtype* out, bool fixed_point,
@@ -266,9 +266,11 @@ __global__ void AREASApproximateCompute(const int n_threads, const Dtype* const 
 	 int length = sizeof(coefficient) / sizeof(coefficient[0]);
 	 
 	 Dtype pass_region = 0.005;
+	 Dtype max_region = 500;
 	 Dtype lut_index;
 	 if (fixed_point) {  
 	    FixedPointSigmoidQuan(&pass_region, bit_width, bit_width-1, 0);
+	    FixedPointSigmoidQuan(&max_region, bit_width, fl, 0);
 	    FixedPointQuan(variable, length, bit_width, fl, 0);
 	    FixedPointQuan(coefficient, length, bit_width, bit_width-1, 0);
 	    FixedPointQuan(const_b, length, bit_width, bit_width-1, 0);
@@ -280,7 +282,7 @@ __global__ void AREASApproximateCompute(const int n_threads, const Dtype* const 
 	     	FixedPointSigmoidQuan(&lut_index, bit_width, fl, 0);
 	     }
 	     
-	     if (lut_index > 500)
+	     if (lut_index > max_region)
 	         out[index_d] = pass_region;
 	     else {
 		 for(int index_v = 0; index_v < length; ++index_v) {
@@ -383,9 +385,11 @@ __global__ void LUT198ApproximateCompute(const int n_threads, const Dtype* const
          int length = sizeof(values) / sizeof(values[0]);
 	 
 	 Dtype pass_region = 0.01;
+	 Dtype max_region = 256;
 	 Dtype lut_index;
 	 if (fixed_point) {
              FixedPointSigmoidQuan(&pass_region, bit_width, bit_width-1, 0);
+	     FixedPointSigmoidQuan(&max_region, bit_width, fl, 0);
 	     FixedPointQuan(variable, length, bit_width, fl, 0);
 	     FixedPointQuan(values, length, bit_width, bit_width-1, 0);
 	 }
@@ -396,7 +400,7 @@ __global__ void LUT198ApproximateCompute(const int n_threads, const Dtype* const
 	     	FixedPointSigmoidQuan(&lut_index, bit_width, fl, 0);
 	     }
 	     
-	     if (lut_index > 256)
+	     if (lut_index > max_region)
 	         out[index_d] = pass_region;
 	     else {
 	         for(int index_v = 0; index_v < length; ++index_v) {
@@ -571,9 +575,11 @@ __global__ void LUT400ApproximateCompute(const int n_threads, const Dtype* const
         int length = sizeof(values) / sizeof(values[0]);
 			   
 	 Dtype pass_region = 0.005;
+	 Dtype max_region = 1024;
 	 Dtype lut_index;
 	 if (fixed_point) {
              FixedPointSigmoidQuan(&pass_region, bit_width, bit_width-1, 0);
+	     FixedPointSigmoidQuan(&max_region, bit_width, fl, 0);
 	     FixedPointQuan(variable, length, bit_width, fl, 0);
 	     FixedPointQuan(values, length, bit_width, bit_width-1, 0);
 	 }
@@ -584,7 +590,7 @@ __global__ void LUT400ApproximateCompute(const int n_threads, const Dtype* const
 	     	FixedPointSigmoidQuan(&lut_index, bit_width, fl, 0);
 	     }
 	     
-	     if (lut_index > 1024)
+	     if (lut_index > max_region)
 	         out[index_d] = pass_region;
 	     else {
 	         for(int index_v = 0; index_v < length; ++index_v) {
