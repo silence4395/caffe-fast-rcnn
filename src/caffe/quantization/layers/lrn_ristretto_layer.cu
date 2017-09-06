@@ -95,9 +95,7 @@ void LRNRistrettoLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
 	LOG(FATAL) << "Unknow trimming mode: " << this->precision_;
     break;
   case LRNParameter_NormRegion_WITHIN_CHANNEL:
-    //TODO implement
-    LOG(FATAL) << "Unsupported normalization region: " <<
-        LRNParameter_NormRegion_WITHIN_CHANNEL;
+  WithinChannelForward(bottom, top);
     break;
   default:
     LOG(FATAL) << "Unknown normalization region.";
@@ -647,8 +645,8 @@ void LRNRistrettoLayer<Dtype>::CrossChannelForwardFixedPoint_gpu(
   
   op_type = POWER;
   bool fixed_point = 0;
-  int bit_width = 32;
-  int fl = 23;
+  int bit_width = 8;
+  int fl = 2;
   
   switch(op_type) {
      case POWER:

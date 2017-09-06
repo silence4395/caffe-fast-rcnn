@@ -346,7 +346,7 @@ void PowerLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
        LUT_400 = 3
   } op_type;
   
-  op_type = LUT_198;
+  op_type = POWER;
   
   switch(op_type) {
      case POWER:

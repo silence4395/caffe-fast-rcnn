@@ -37,8 +37,27 @@ LRNRistrettoLayer<Dtype>::LRNRistrettoLayer(const LayerParameter& param)
 template <typename Dtype>
 void LRNRistrettoLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-  //TODO
-  LOG(FATAL) << "LRNRistrettoLayer not implemented on CPU yet.";
+  switch (this->layer_param_.lrn_param().norm_region()) {
+  case LRNParameter_NormRegion_ACROSS_CHANNELS:
+    // TODO
+    LOG(FATAL) << "LRNRistretto ACROSS Layer not implemented on CPU yet.";
+    break;
+  case LRNParameter_NormRegion_WITHIN_CHANNEL:
+    WithinChannelForward(bottom, top);
+    break;
+  default:
+    LOG(FATAL) << "Unknown normalization region.";
+  }
+}
+
+template <typename Dtype>
+void LRNRistrettoLayer<Dtype>::WithinChannelForward(
+    const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
+  split_layer_->Forward(bottom, split_top_vec_);
+  square_layer_->Forward(square_bottom_vec_, square_top_vec_);
+  pool_layer_->Forward(square_top_vec_, pool_top_vec_);
+  power_layer_->Forward(pool_top_vec_, power_top_vec_);
+  product_layer_->Forward(product_bottom_vec_, top);
 }
 
 template <typename Dtype>

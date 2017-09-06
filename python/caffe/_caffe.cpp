@@ -111,10 +111,10 @@ void dynamicfixfloat(char* param_file, int conv_width, int fc_width, int bitwidt
     quan.EditNetDescriptionDynamicFixedPoint(&param, "InnerProduct",
   					     "Parameters", -1, bitwidth, -1, -1);
   else if (type == 2)
-    quan.EditNetDescriptionDynamicFixedPoint(&param, "Convolution_and_InnerProduct",
+    quan.EditNetDescriptionDynamicFixedPoint(&param, "Convolution_and_InnerProduct_and_LRN",
   					     "Activations", -1, -1, bitwidth, bitwidth);
   else if (type == 3)
-    quan.EditNetDescriptionDynamicFixedPoint(&param, "Convolution_and_InnerProduct",
+    quan.EditNetDescriptionDynamicFixedPoint(&param, "Convolution_and_InnerProduct_and_LRN",
       "Parameters_and_Activations", conv_width, fc_width, bitwidth, bitwidth);
   else
     printf(" [ ERROR ] Please set type between zero and two.");

@@ -11,6 +11,11 @@
 #include "caffe/data_reader.hpp"
 #include "caffe/proto/caffe.pb.h"
 
+#include "caffe/layers/eltwise_layer.hpp"
+#include "caffe/layers/pooling_layer.hpp"
+#include "caffe/layers/power_layer.hpp"
+#include "caffe/layers/split_layer.hpp"
+
 namespace caffe {
 
 /**
@@ -157,8 +162,10 @@ class LRNRistrettoLayer : public LRNLayer<Dtype>,
       public BaseRistrettoLayer<Dtype>{
  public:
   explicit LRNRistrettoLayer(const LayerParameter& param);
+  //virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
+  //			  const vector<Blob<Dtype>*>& top);
   virtual inline const char* type() const { return "LRNRistretto"; }
-
+  
  protected:
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
@@ -172,6 +179,26 @@ class LRNRistrettoLayer : public LRNLayer<Dtype>,
       const vector<Blob<Dtype>*>& top);
   virtual void CrossChannelForwardFixedPoint_gpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
+  virtual void WithinChannelForward(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+  
+  // Fields used for normalization WITHIN_CHANNEL
+  shared_ptr<SplitLayer<Dtype> > split_layer_;
+  vector<Blob<Dtype>*> split_top_vec_;
+  shared_ptr<PowerLayer<Dtype> > square_layer_;
+  Blob<Dtype> square_input_;
+  Blob<Dtype> square_output_;
+  vector<Blob<Dtype>*> square_bottom_vec_;
+  vector<Blob<Dtype>*> square_top_vec_;
+  shared_ptr<PoolingLayer<Dtype> > pool_layer_;
+  Blob<Dtype> pool_output_;
+  vector<Blob<Dtype>*> pool_top_vec_;
+  shared_ptr<PowerLayer<Dtype> > power_layer_;
+  Blob<Dtype> power_output_;
+  vector<Blob<Dtype>*> power_top_vec_;
+  shared_ptr<EltwiseLayer<Dtype> > product_layer_;
+  Blob<Dtype> product_input_;
+  vector<Blob<Dtype>*> product_bottom_vec_;
 };
 
 }  // namespace caffe
