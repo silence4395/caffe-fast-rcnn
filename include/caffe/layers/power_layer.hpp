@@ -74,8 +74,6 @@ class PowerLayer : public NeuronLayer<Dtype> {
   virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
 
-  virtual void FixedPoint(Dtype* data, const int cnt,
-			      const int bit_width, const int fl, const int rounding);
   /// @brief @f$ \gamma @f$ from layer_param_.power_param()
   Dtype power_;
   /// @brief @f$ \alpha @f$ from layer_param_.power_param()

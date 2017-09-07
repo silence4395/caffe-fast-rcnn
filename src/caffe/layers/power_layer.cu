@@ -1,4 +1,5 @@
 #include <vector>
+#include <cmath>
 
 #include "caffe/layers/power_layer.hpp"
 #include "caffe/util/math_functions.hpp"
@@ -420,6 +421,16 @@ __global__ void LUT400ApproximateCompute(const int count, const Dtype* in, Dtype
 }
 
 template <typename Dtype>
+__global__ void POWERCompute(const int count, Dtype* in, const Dtype alpha, Dtype* out,
+	                     int fixed_point, int bit_width, int fl) {
+    if (fixed_point)
+        FixedPointQuan(in, count, bit_width, fl, 0);
+    CUDA_KERNEL_LOOP(index, count) {
+        out[index] = pow(in[index], alpha);
+    }
+}
+
+template <typename Dtype>
 void PowerLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     const vector<Blob<Dtype>*>& top) {
   Dtype* top_data = top[0]->mutable_gpu_data();
@@ -453,16 +464,18 @@ void PowerLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   } op_type;
   
   op_type = POWER;
-  int fixed_point = 0;
-  int bit_width = 8;
-  int fl = 2;
+  int fixed_point = 1;
+  int bit_width = 32;
+  int fl = 23;
   
   switch(op_type) {
      case POWER:
       {
-         if (fixed_point == 1)
-	     FixedPoint(top_data, count, bit_width, fl, 0);
-         caffe_gpu_powx(count, top_data, power_, top_data);
+         //caffe_gpu_powx(count, top_data, power_, top_data);
+	 CUDA_POST_KERNEL_CHECK;
+	 POWERCompute<<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(
+	     count, top_data, power_, top_data, fixed_point, bit_width, fl);
+	 CUDA_POST_KERNEL_CHECK;
       	 break;
       }
      case AREAS:

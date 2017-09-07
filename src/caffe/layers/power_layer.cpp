@@ -1,4 +1,7 @@
 #include <vector>
+#include <math.h>
+#include <algorithm>
+#include <stdlib.h>
 
 #include "caffe/layers/power_layer.hpp"
 #include "caffe/util/math_functions.hpp"
@@ -13,29 +16,6 @@ void PowerLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   scale_ = this->layer_param_.power_param().scale();
   shift_ = this->layer_param_.power_param().shift();
   diff_scale_ = power_  * scale_;
-}
-
-template <typename Dtype>
-void PowerLayer<Dtype>::FixedPoint(Dtype* data, const int cnt,
-      const int bit_width, const int fl, const int rounding) {
-     for(int index = 0; index < cnt; ++index) {
-        Dtype max_data = (powf(2, bit_width - 1) - 1) * powf(2, -fl);
-        Dtype min_data = -powf(2, bit_width - 1) * powf(2, -fl);
-        data[index] = fmax(fmin(data[index], max_data), min_data);
-        // Round data
-        data[index] /= powf(2, -fl);
-        switch (rounding) {
-        case 0: // NEAREST
-          data[index] = rint(data[index]);
-          break;
-        case 1: // STOCHASTIC
-          data[index] = floor(data[index] + (rand() / (RAND_MAX+1.0)));
-          break;
-        default:
-          break;
-        }
-        data[index] *= powf(2, -fl);	
-    }
 }
 
 // Compute y = (shift + scale * x)^power
