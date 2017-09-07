@@ -651,8 +651,8 @@ void LRNRistrettoLayer<Dtype>::CrossChannelForwardFixedPoint_gpu(
   
   op_type = POWER;
   bool fixed_point = 0;
-  int bit_width = 8;
-  int fl = 2;
+  int bit_width = 24;
+  int fl = 12;
   
   switch(op_type) {
      case POWER:
