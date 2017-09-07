@@ -420,28 +420,6 @@ __global__ void LUT400ApproximateCompute(const int count, const Dtype* in, Dtype
 }
 
 template <typename Dtype>
-void FixedPoint(Dtype* data, const int cnt, const int bit_width, const int fl, const int rounding) {
-     for(int index = 0; index < cnt; ++index) {
-        Dtype max_data = (powf(2, bit_width - 1) - 1) * powf(2, -fl);
-        Dtype min_data = -powf(2, bit_width - 1) * powf(2, -fl);
-        data[index] = fmax(fmin(data[index], max_data), min_data);
-        // Round data
-        data[index] /= powf(2, -fl);
-        switch (rounding) {
-        case 0: // NEAREST
-          data[index] = rint(data[index]);
-          break;
-        case 1: // STOCHASTIC
-          data[index] = __float2int_rd(data[index] + (rand() / (RAND_MAX+1.0)));
-          break;
-        default:
-          break;
-        }
-        data[index] *= powf(2, -fl);	
-    }
-}
-
-template <typename Dtype>
 void PowerLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     const vector<Blob<Dtype>*>& top) {
   Dtype* top_data = top[0]->mutable_gpu_data();
