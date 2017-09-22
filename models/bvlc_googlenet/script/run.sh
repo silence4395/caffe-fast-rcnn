@@ -44,5 +44,6 @@ echo "Compiler done!"
 echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
 
 cd ../../../
-./build/tools/caffe test --gpu=$GPU_ID --model=models/bvlc_googlenet/train_val.prototxt --weights=models/bvlc_googlenet/bvlc_googlenet.caffemodel |& tee log
+#./build/tools/caffe test --gpu=$GPU_ID --model=models/bvlc_googlenet/train_val.prototxt --weights=models/bvlc_googlenet/bvlc_googlenet.caffemodel |& tee log
+./build/tools/caffe test --gpu=$GPU_ID --model=models/bvlc_googlenet/lrn_quan.prototxt --weights=models/bvlc_googlenet/bvlc_googlenet.caffemodel |& tee log
 mv log models/bvlc_googlenet/script/. 

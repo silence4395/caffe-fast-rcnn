@@ -464,9 +464,62 @@ void PowerLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   } op_type;
   
   op_type = POWER;
-  int fixed_point = 1;
+  int fixed_point = 0;
   int bit_width = 32;
   int fl = 23;
+  
+  Dtype* tmp_top_data = top[0]->mutable_cpu_data();
+  int cnt[20] = {0,0,0,0,0,00,0,0,0,0,0,00,0,0,0,0,0,0,0,00};
+	//for (int i = 0; i < count; ++i) {	
+	//    if (tmp_top_data[i] < 2)
+	//       cnt[0] = cnt[0] + 1;
+	//    else if (tmp_top_data[i] < 3)
+	//       cnt[1] = cnt[1] + 1;
+	//    else if (tmp_top_data[i] < 4)
+	//       cnt[2] = cnt[2] + 1;
+	//    else if (tmp_top_data[i] < 5)
+	//       cnt[3] = cnt[3] + 1;
+	//    else if (tmp_top_data[i] < 6)
+	//       cnt[4] = cnt[4] + 1;
+	//    else if (tmp_top_data[i] < 7)
+	//       cnt[5] = cnt[5] + 1;
+	//    else if (tmp_top_data[i] < 8)
+	//       cnt[6] = cnt[6] + 1;
+	//    else if (tmp_top_data[i] < 9)
+	//       cnt[7] = cnt[7] + 1;
+	//    else if (tmp_top_data[i] < 10)
+	//       cnt[8] = cnt[8] + 1;
+	//    else if (tmp_top_data[i] < 11)
+	//       cnt[9] = cnt[9] + 1;
+	//    else if (tmp_top_data[i] < 12)
+	//       cnt[10] = cnt[10] + 1;
+	//    else if (tmp_top_data[i] < 13)
+	//       cnt[11] = cnt[11] + 1;
+	//    else if (tmp_top_data[i] < 14)
+	//       cnt[12] = cnt[12] + 1;
+	//    else if (tmp_top_data[i] < 20)
+	//       cnt[13] = cnt[13] + 1;
+	//    else if (tmp_top_data[i] < 30)
+	//       cnt[14] = cnt[14] + 1;
+	//    else if (tmp_top_data[i] < 40)
+	//       cnt[15] = cnt[15] + 1;
+	//    else if (tmp_top_data[i] < 50)
+	//       cnt[16] = cnt[16] + 1;
+	//    else if (tmp_top_data[i] < 100)
+	//       cnt[17] = cnt[17] + 1;
+	//    else if (tmp_top_data[i] < 200)
+	//       cnt[18] = cnt[18] + 1;
+	//    else
+	//       cnt[19] = cnt[19] + 1;
+	//}
+	//cout << "count: " << count << ", 2: " << cnt[0] << ", 3: " << cnt[1] << ", 4: " << cnt[2] <<
+	//        ", 5: " << cnt[3] << ", 6: " << cnt[4] << ", 7: " << cnt[5] << ", 8: " << cnt[6] <<
+	//	", 9: " << cnt[7] << ", 10: " << cnt[8] << ", 11: " << cnt[9] << ", 12: " << cnt[10] <<
+	//	", 13: " << cnt[11] << ", 14: " << cnt[12] << ", 20: " << cnt[13] << ", 30: " << cnt[14] <<
+	//	", 40: " << cnt[15] << ", 50: " << cnt[16] << ", 100: " << cnt[17] << ", 200: " << cnt[18] << 
+	//	", top: " << cnt[19] << endl;
+  
+  Dtype* top_data = top[0]->mutable_gpu_data();
   
   switch(op_type) {
      case POWER:

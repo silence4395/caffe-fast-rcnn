@@ -33,8 +33,8 @@ __global__ void LRNFillScale(const int nthreads, const Dtype* const in,
     while (head < channels) {
       accum_scale += in_off[head * step] * in_off[head * step];
       if (head - size >= 0) {
-        accum_scale -= in_off[(head - size) * step]
-                       * in_off[(head - size) * step];
+	accum_scale -= in_off[(head - size) * step]
+		       * in_off[(head - size) * step];
       }
       scale_off[(head - post_pad) * step] = k + accum_scale * alpha_over_size;
       ++head;
@@ -42,8 +42,8 @@ __global__ void LRNFillScale(const int nthreads, const Dtype* const in,
     // subtract only
     while (head < channels + post_pad) {
       if (head - size >= 0) {
-        accum_scale -= in_off[(head - size) * step]
-                       * in_off[(head - size) * step];
+	accum_scale -= in_off[(head - size) * step]
+		       * in_off[(head - size) * step];
       }
       scale_off[(head - post_pad) * step] = k + accum_scale * alpha_over_size;
       ++head;
@@ -60,44 +60,44 @@ RandUniform_device(const int index) {
 
 template <typename Dtype>
 __device__ void FixedPointSigmoidQuan(Dtype* data, const int bit_width, const int fl, const int rounding) {
-        Dtype max_data = (powf(2, bit_width - 1) - 1) * powf(2, -fl);
-        Dtype min_data = -powf(2, bit_width - 1) * powf(2, -fl);
-        *data = fmax(fmin(*data, max_data), min_data);
-        // Round data
-        *data /= powf(2, -fl);
-        switch (rounding) {
-        case 0: // NEAREST
-          *data = rint(*data);
-          break;
-        case 1: // STOCHASTIC
-          *data = __float2int_rd(*data + RandUniform_device(0));
-          break;
-        default:
-          break;
-        }
-        *data *= powf(2, -fl);
+	Dtype max_data = (powf(2, bit_width - 1) - 1) * powf(2, -fl);
+	Dtype min_data = -powf(2, bit_width - 1) * powf(2, -fl);
+	*data = fmax(fmin(*data, max_data), min_data);
+	// Round data
+	*data /= powf(2, -fl);
+	switch (rounding) {
+	case 0: // NEAREST
+	  *data = rint(*data);
+	  break;
+	case 1: // STOCHASTIC
+	  *data = __float2int_rd(*data + RandUniform_device(0));
+	  break;
+	default:
+	  break;
+	}
+	*data *= powf(2, -fl);
 }
 
 template <typename Dtype>
 __device__ void FixedPointQuan(Dtype* data, const int cnt,
-	                       const int bit_width, const int fl, const int rounding) {
+			       const int bit_width, const int fl, const int rounding) {
     CUDA_KERNEL_LOOP(index, cnt) {
-        Dtype max_data = (powf(2, bit_width - 1) - 1) * powf(2, -fl);
-        Dtype min_data = -powf(2, bit_width - 1) * powf(2, -fl);
-        data[index] = fmax(fmin(data[index], max_data), min_data);
-        // Round data
-        data[index] /= powf(2, -fl);
-        switch (rounding) {
-        case 0: // NEAREST
-          data[index] = rint(data[index]);
-          break;
-        case 1: // STOCHASTIC
-          data[index] = __float2int_rd(data[index] + RandUniform_device(index));
-          break;
-        default:
-          break;
-        }
-        data[index] *= powf(2, -fl);	
+	Dtype max_data = (powf(2, bit_width - 1) - 1) * powf(2, -fl);
+	Dtype min_data = -powf(2, bit_width - 1) * powf(2, -fl);
+	data[index] = fmax(fmin(data[index], max_data), min_data);
+	// Round data
+	data[index] /= powf(2, -fl);
+	switch (rounding) {
+	case 0: // NEAREST
+	  data[index] = rint(data[index]);
+	  break;
+	case 1: // STOCHASTIC
+	  data[index] = __float2int_rd(data[index] + RandUniform_device(index));
+	  break;
+	default:
+	  break;
+	}
+	data[index] *= powf(2, -fl);
     }
 }
 
@@ -120,30 +120,47 @@ void LRNLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
 // add by zhluo, 9/2/2017
 template <typename Dtype>
 __global__ void AREASApproximateCompute(const int n_threads, const Dtype* const bottom,
-	                                const Dtype* in, Dtype* out, int fixed_point,
+					const Dtype* in, Dtype* out, int fixed_point,
 					int bit_width_in, int fl_in, int bit_width_out, int fl_out) {
-         float variable[22] = {1.25, 1.5, 1.75, 2 , 3 , 4 , 5  , 6  , 7  , 8  ,
-			       9   , 10 , 20  , 30, 40, 50, 100, 150, 200, 300,
-			       400, 500};
-	 float coefficient[22] = {-0.614942702877   , -0.431915810474   , -0.322019267621   , 
-	                          -0.250473112162   , -0.155900736925   , -0.0851335094465  ,
-				  -0.0544815774316  , -0.038221096796   , -0.0284781347549  ,
-				  -0.022144085262   , -0.0177737273373  , -0.0146220568874  ,
-	                          -0.00715725449729 , -0.00279313184789 , -0.00150150072144 ,
-				  -0.000964051261494, -0.000428103671576, -0.000167068252181,
-				  -8.98106909522e-05, -4.96696885463e-05, -2.67008781709e-05,
-				  -1.71435250854e-05};
-	 float const_b[22] = {1.60975075579  , 1.38285473956  , 1.21898366501  ,
-	                      1.09433785502  , 0.897219434112 , 0.690525480745 ,
-	                      0.569707973835 , 0.489159227786 , 0.431075802405 ,
-	                      0.386945714703 , 0.352108590613 , 0.32382395031  ,
-	                      0.241944064196 , 0.160070213173 , 0.122360341268 ,
-	                      0.10109474241  , 0.0723581523039, 0.0478721596357,
-	                      0.0365942774371, 0.0284649564246, 0.0217590875483,
-	                      0.0179774698891};
-	 int length = sizeof(coefficient) / sizeof(coefficient[0]);
+	 //float variable[22] = {1.25, 1.5, 1.75, 2 , 3 , 4 , 5  , 6  , 7  , 8  ,
+	 //		       9   , 10 , 20  , 30, 40, 50, 100, 150, 200, 300,
+	 //		       400, 500};
+	 //float coefficient[22] = {-0.614942702877   , -0.431915810474   , -0.322019267621   ,
+	 //                         -0.250473112162   , -0.155900736925   , -0.0851335094465  ,
+	 //			  -0.0544815774316  , -0.038221096796   , -0.0284781347549  ,
+	 //			  -0.022144085262   , -0.0177737273373  , -0.0146220568874  ,
+	 //                         -0.00715725449729 , -0.00279313184789 , -0.00150150072144 ,
+	 //			  -0.000964051261494, -0.000428103671576, -0.000167068252181,
+	 //			  -8.98106909522e-05, -4.96696885463e-05, -2.67008781709e-05,
+	 //			  -1.71435250854e-05};
+	 //float const_b[22] = {1.60975075579  , 1.38285473956  , 1.21898366501  ,
+	 //                     1.09433785502  , 0.897219434112 , 0.690525480745 ,
+	 //                     0.569707973835 , 0.489159227786 , 0.431075802405 ,
+	 //                     0.386945714703 , 0.352108590613 , 0.32382395031  ,
+	 //                     0.241944064196 , 0.160070213173 , 0.122360341268 ,
+	 //                     0.10109474241  , 0.0723581523039, 0.0478721596357,
+	 //                     0.0365942774371, 0.0284649564246, 0.0217590875483,
+	 //                     0.0179774698891};
 	 
-	 Dtype pass_region = 0.005;
+	 float variable[16] = {1.25, 1.5, 1.75, 2 , 3 , 4 , 5  , 6  , 7  , 8  ,
+	 		       9   , 10 , 20  , 30, 40, 50};
+	 float coefficient[16] = {-0.614942702877   , -0.431915810474	, -0.322019267621   ,
+				  -0.250473112162   , -0.155900736925	, -0.0851335094465  ,
+				  -0.0544815774316  , -0.038221096796	, -0.0284781347549  ,
+				  -0.022144085262   , -0.0177737273373	, -0.0146220568874  ,
+				  -0.00715725449729 , -0.00279313184789 , -0.00150150072144 ,
+				  -0.000964051261494 };
+	 float const_b[16] = {1.60975075579  , 1.38285473956  , 1.21898366501  ,
+			      1.09433785502  , 0.897219434112 , 0.690525480745 ,
+			      0.569707973835 , 0.489159227786 , 0.431075802405 ,
+			      0.386945714703 , 0.352108590613 , 0.32382395031  ,
+			      0.241944064196 , 0.160070213173 , 0.122360341268 ,
+			      0.10109474241  };
+	 
+	 int length = sizeof(coefficient) / sizeof(coefficient[0]);
+
+	 //Dtype pass_region = 0.03;
+	 Dtype pass_region = 0.03;
 	 Dtype input_data;
 	 Dtype bottom_data;
 	 if (fixed_point) {
@@ -152,40 +169,40 @@ __global__ void AREASApproximateCompute(const int n_threads, const Dtype* const 
 	     FixedPointQuan(coefficient, length, bit_width_out, bit_width_out-1, 0);
 	     FixedPointQuan(const_b, length, bit_width_out, bit_width_out-1, 0);
 	 }
-	 
+
 	 CUDA_KERNEL_LOOP(index_d, n_threads) {
 	     input_data = in[index_d];
 	     if (fixed_point)
 	     	 FixedPointSigmoidQuan(&input_data, bit_width_in, fl_in+4, 0);
-	     if (input_data > 500)
-	         out[index_d] = pass_region;
+	     if (input_data > 50)//500)
+		 out[index_d] = pass_region;
 	     else {
 		 for(int index_v = 0; index_v < length; ++index_v) {
-	             if (input_data < variable[index_v]) {
-	                 out[index_d] = coefficient[index_v] * input_data + const_b[index_v];
-	                 break;
-	             }
-	         }
+		     if (input_data < variable[index_v]) {
+			 out[index_d] = coefficient[index_v] * input_data + const_b[index_v];
+			 break;
+		     }
+		 }
 	     }
 	     bottom_data = bottom[index_d];
 	     if (fixed_point) {
 	     	FixedPointSigmoidQuan(&(out[index_d]), bit_width_out, bit_width_out-1, 0);
 		FixedPointSigmoidQuan(&bottom_data, bit_width_in, fl_in, 0);
 	     }
-	     
+
 	     out[index_d] = out[index_d] * bottom_data;
-	     
+
 	     if (fixed_point) {
-	         FixedPointSigmoidQuan(&(out[index_d]), bit_width_out, fl_out, 0);
+		 FixedPointSigmoidQuan(&(out[index_d]), bit_width_out, fl_out, 0);
 	     }
 	 }
 }
 
 template <typename Dtype>
 __global__ void LUT198ApproximateCompute(const int n_threads, const Dtype* const bottom,
-	                                 const Dtype* in, Dtype* out) {
-         float variable[198] = {1.015625, 1.03125 , 1.046875, 1.0625  , 1.078125, 1.09375 , 1.109375,
-	                        1.125   , 1.140625, 1.15625 , 1.171875, 1.1875  , 1.203125, 1.21875 ,
+					 const Dtype* in, Dtype* out) {
+	 float variable[198] = {1.015625, 1.03125 , 1.046875, 1.0625  , 1.078125, 1.09375 , 1.109375,
+				1.125   , 1.140625, 1.15625 , 1.171875, 1.1875  , 1.203125, 1.21875 ,
 				1.234375, 1.25	  , 1.265625, 1.28125 , 1.296875, 1.3125  , 1.328125,
 				1.34375 , 1.359375, 1.375   , 1.390625, 1.40625 , 1.421875, 1.4375  ,
 				1.453125, 1.46875 , 1.484375, 1.5     , 1.515625, 1.53125 , 1.546875,
@@ -196,7 +213,7 @@ __global__ void LUT198ApproximateCompute(const int n_threads, const Dtype* const
  		       		2.0     , 2.03125 , 2.0625  , 2.09375 , 2.125   , 2.15625 , 2.1875  ,
 				2.21875 , 2.25    , 2.28125 , 2.3125  , 2.34375 , 2.375   , 2.40625 ,
 				2.4375	, 2.46875 , 2.5     , 2.53125 , 2.5625  , 2.59375 , 2.625   ,
-			        2.65625 , 2.6875  , 2.71875 , 2.75    , 2.78125 , 2.8125  , 2.84375 ,
+				2.65625 , 2.6875  , 2.71875 , 2.75    , 2.78125 , 2.8125  , 2.84375 ,
 				2.875	, 2.90625 , 2.9375  , 2.96875 , 3.0     , 3.03125 , 3.0625  ,
 				3.09375 , 3.125   , 3.15625 , 3.1875  , 3.21875 , 3.25    , 3.28125 ,
 				3.3125  , 3.34375 , 3.375   , 3.40625 , 3.4375	, 3.46875 , 3.5     ,
@@ -213,69 +230,69 @@ __global__ void LUT198ApproximateCompute(const int n_threads, const Dtype* const
 				30.0    , 32.0    , 36.0    , 40.0    , 44.0    , 48.0    , 52.0    ,
 				56.0    , 60.0    , 64.0    , 80.0    , 96.0    , 112.0	  , 128.0   ,
 				192.0   , 256};
- 
-         float values[198] = {0.9942065333963459, 0.9827998414527859, 0.9716939265934808 , 0.9608765102608388 ,
-          		      0.9503359874419031, 0.94006138054108   , 0.9300422970227042 , 0.9202688904668247,
-          		      0.9107318247197804, 0.9014222408547905 , 0.8923317266874584 , 0.883452288617333 ,
-          		      0.8747763255898964, 0.8662966049939489 , 0.8580062403276674 , 0.8498986704828934,
-          		      0.8419676405117158, 0.8342071837523677 , 0.8266116052030255 , 0.8191754660424586,
-          		      0.8118935692057623, 0.8047609459317389 , 0.7977728432059796 , 0.7909247120304375,
-          		      0.7842121964563522, 0.7776311233228648 , 0.7711774926486059 , 0.7648474686280107,
-          		      0.7586373711881655, 0.7525436680656609 , 0.7465629673662475 , 0.7406920105731243,
-          		      0.7349276659724292, 0.7292669224670087 , 0.723706883751821  , 0.7182447628264019,
-          		      0.7128778768217295, 0.7076036421205434 , 0.7024195697517719 , 0.697323261041165 ,
-          		      0.6923124035015621, 0.6873847669474409 , 0.6825381998195154 , 0.6777706257061765,
-          		      0.6730800400495128, 0.6684645070245199 , 0.6639221565809041 , 0.6594511816376277,
-          		      0.6550498354210164, 0.6507164289378845 , 0.6464493285757057 , 0.6422469538223973,
-          		      0.6381077750987793, 0.6340303116972268 , 0.6300131298204615 , 0.6260548407148175,
-          		      0.6221540988926849, 0.6183096004391694 , 0.6145200813983247 , 0.6107843162346012,
-          		      0.6071011163654301, 0.6034693287611125 , 0.5998878346084175 , 0.5963555480345142,
-          		      0.5911548559969042, 0.5843725573634406 , 0.5777690928954383 , 0.5713371623411745,
-          		      0.5650698658893908, 0.5589606767467984 , 0.5530034159566071 , 0.5471922292460922,
-          		      0.5415215657139216, 0.5359861581879586 , 0.5305810051019025 , 0.5253013537547238,
-          		      0.5201426848306566, 0.5151006980697612 , 0.5101712989899433 , 0.5053505865709982,
-          		      0.5006348418198747, 0.49602051714404793, 0.49150422646677017, 0.4870827360241300,
-          		      0.4827529557893637, 0.4785119314748195 , 0.4743568370664263 , 0.4702849678495203,
-          		      0.4662937338884970, 0.46238065392600736, 0.4585433496703581 , 0.4547795404424364,
-          		      0.4510870381558817, 0.447463742606415  , 0.4439076370482061 , 0.4404167840369663,
-          		      0.4369893215210794, 0.4336234591635775 , 0.43031747487911765, 0.4270697115713567,
-          		      0.4238785740572444, 0.4207425261657882 , 0.4176600879997844 , 0.4146298333498747,
-          		      0.4116503872510736, 0.40872042367264294, 0.405838663332847  , 0.4030038716307417,
-          		      0.4002148566877026, 0.3974704674919237 , 0.394769592139585  , 0.3921111561668325,
-          		      0.3894941209671141, 0.3869174822887882 , 0.38438026880826975, 0.3818815407742914,
-          		      0.3794203887191560, 0.3769959322331274 , 0.37460731879835835, 0.3722537226789900,
-          		      0.3699343438642712, 0.36764840706175084, 0.36539516073777845, 0.3631738762027278,
-          		      0.3609838467385128, 0.35882438676612194, 0.35669483105102984, 0.3545945339444823,
-          		      0.3494863906904168, 0.34163133342002294, 0.3341762794911689 , 0.3270901221138302,
-          		      0.3203449627770323, 0.31391570330181484, 0.307779699054627  , 0.3019164628299127,
-          		      0.2963074109258216, 0.29093564452567355, 0.2857857607582184 , 0.2808436888157173,
-          		      0.2760965473163687, 0.27153251974928294, 0.2671407453688733 , 0.2629112233364827,
-          		      0.2588347282600416, 0.2549027355729341 , 0.2511073554331695 , 0.2474412740230017,
-          		      0.2438977012949073, 0.24047032434842042, 0.23715326573859646, 0.2339410461147744,
-          		      0.230828550670997 , 0.22781099895953155, 0.22488391767850202, 0.2220431160954325,
-          		      0.2192846638119274, 0.21660487061194744, 0.2140002681681466 , 0.2114675934083249,
-          		      0.2054705280934311, 0.19659567696348093, 0.1885668238622485 , 0.1812637531496289,
-          		      0.1745884047270054, 0.16845994307723308, 0.16281109559430582, 0.1575853930126261,
-          		      0.1527350617150679, 0.1482193942538512 , 0.1440034755294256 , 0.1400571768194182,
-          		      0.1363543538650655, 0.13287220207413075, 0.12959073389005593, 0.1264923520196497,
-          		      0.1195349966730957, 0.10995128763635523, 0.10198888353645309, 0.0952544456677640,
-          		      0.0894742948803212, 0.08445173707615726, 0.08004153386779624, 0.0761339568761960,
-          		      0.0710757235217595, 0.06537727168098752, 0.06064283525558824, 0.0566385406324998,
-          		      0.0532016612090592, 0.05021524437727359, 0.04759293238224154, 0.0452694813187894,
-          		      0.0405677174993462, 0.03486796140116503, 0.03074602986436756, 0.0276081607120381,
-          		      0.0224271604857236, 0.01734880445246167};
-         int length = sizeof(values) / sizeof(values[0]);
-	 
+
+	 float values[198] = {0.9942065333963459, 0.9827998414527859, 0.9716939265934808 , 0.9608765102608388 ,
+			      0.9503359874419031, 0.94006138054108   , 0.9300422970227042 , 0.9202688904668247,
+			      0.9107318247197804, 0.9014222408547905 , 0.8923317266874584 , 0.883452288617333 ,
+			      0.8747763255898964, 0.8662966049939489 , 0.8580062403276674 , 0.8498986704828934,
+			      0.8419676405117158, 0.8342071837523677 , 0.8266116052030255 , 0.8191754660424586,
+			      0.8118935692057623, 0.8047609459317389 , 0.7977728432059796 , 0.7909247120304375,
+			      0.7842121964563522, 0.7776311233228648 , 0.7711774926486059 , 0.7648474686280107,
+			      0.7586373711881655, 0.7525436680656609 , 0.7465629673662475 , 0.7406920105731243,
+			      0.7349276659724292, 0.7292669224670087 , 0.723706883751821  , 0.7182447628264019,
+			      0.7128778768217295, 0.7076036421205434 , 0.7024195697517719 , 0.697323261041165 ,
+			      0.6923124035015621, 0.6873847669474409 , 0.6825381998195154 , 0.6777706257061765,
+			      0.6730800400495128, 0.6684645070245199 , 0.6639221565809041 , 0.6594511816376277,
+			      0.6550498354210164, 0.6507164289378845 , 0.6464493285757057 , 0.6422469538223973,
+			      0.6381077750987793, 0.6340303116972268 , 0.6300131298204615 , 0.6260548407148175,
+			      0.6221540988926849, 0.6183096004391694 , 0.6145200813983247 , 0.6107843162346012,
+			      0.6071011163654301, 0.6034693287611125 , 0.5998878346084175 , 0.5963555480345142,
+			      0.5911548559969042, 0.5843725573634406 , 0.5777690928954383 , 0.5713371623411745,
+			      0.5650698658893908, 0.5589606767467984 , 0.5530034159566071 , 0.5471922292460922,
+			      0.5415215657139216, 0.5359861581879586 , 0.5305810051019025 , 0.5253013537547238,
+			      0.5201426848306566, 0.5151006980697612 , 0.5101712989899433 , 0.5053505865709982,
+			      0.5006348418198747, 0.49602051714404793, 0.49150422646677017, 0.4870827360241300,
+			      0.4827529557893637, 0.4785119314748195 , 0.4743568370664263 , 0.4702849678495203,
+			      0.4662937338884970, 0.46238065392600736, 0.4585433496703581 , 0.4547795404424364,
+			      0.4510870381558817, 0.447463742606415  , 0.4439076370482061 , 0.4404167840369663,
+			      0.4369893215210794, 0.4336234591635775 , 0.43031747487911765, 0.4270697115713567,
+			      0.4238785740572444, 0.4207425261657882 , 0.4176600879997844 , 0.4146298333498747,
+			      0.4116503872510736, 0.40872042367264294, 0.405838663332847  , 0.4030038716307417,
+			      0.4002148566877026, 0.3974704674919237 , 0.394769592139585  , 0.3921111561668325,
+			      0.3894941209671141, 0.3869174822887882 , 0.38438026880826975, 0.3818815407742914,
+			      0.3794203887191560, 0.3769959322331274 , 0.37460731879835835, 0.3722537226789900,
+			      0.3699343438642712, 0.36764840706175084, 0.36539516073777845, 0.3631738762027278,
+			      0.3609838467385128, 0.35882438676612194, 0.35669483105102984, 0.3545945339444823,
+			      0.3494863906904168, 0.34163133342002294, 0.3341762794911689 , 0.3270901221138302,
+			      0.3203449627770323, 0.31391570330181484, 0.307779699054627  , 0.3019164628299127,
+			      0.2963074109258216, 0.29093564452567355, 0.2857857607582184 , 0.2808436888157173,
+			      0.2760965473163687, 0.27153251974928294, 0.2671407453688733 , 0.2629112233364827,
+			      0.2588347282600416, 0.2549027355729341 , 0.2511073554331695 , 0.2474412740230017,
+			      0.2438977012949073, 0.24047032434842042, 0.23715326573859646, 0.2339410461147744,
+			      0.230828550670997 , 0.22781099895953155, 0.22488391767850202, 0.2220431160954325,
+			      0.2192846638119274, 0.21660487061194744, 0.2140002681681466 , 0.2114675934083249,
+			      0.2054705280934311, 0.19659567696348093, 0.1885668238622485 , 0.1812637531496289,
+			      0.1745884047270054, 0.16845994307723308, 0.16281109559430582, 0.1575853930126261,
+			      0.1527350617150679, 0.1482193942538512 , 0.1440034755294256 , 0.1400571768194182,
+			      0.1363543538650655, 0.13287220207413075, 0.12959073389005593, 0.1264923520196497,
+			      0.1195349966730957, 0.10995128763635523, 0.10198888353645309, 0.0952544456677640,
+			      0.0894742948803212, 0.08445173707615726, 0.08004153386779624, 0.0761339568761960,
+			      0.0710757235217595, 0.06537727168098752, 0.06064283525558824, 0.0566385406324998,
+			      0.0532016612090592, 0.05021524437727359, 0.04759293238224154, 0.0452694813187894,
+			      0.0405677174993462, 0.03486796140116503, 0.03074602986436756, 0.0276081607120381,
+			      0.0224271604857236, 0.01734880445246167};
+	 int length = sizeof(values) / sizeof(values[0]);
+
 	 CUDA_KERNEL_LOOP(index_d, n_threads) {
 	     if (in[index_d] > 256)
-	         out[index_d] = 0.01;
+		 out[index_d] = 0.01;
 	     else {
-	         for(int index_v = 0; index_v < length; ++index_v) {
+		 for(int index_v = 0; index_v < length; ++index_v) {
 		     if (in[index_d] < variable[index_v]) {
-		         out[index_d] = values[index_v];
+			 out[index_d] = values[index_v];
 			 break;
-                     }
-	         }
+		     }
+		 }
 	     }
 	     out[index_d] = out[index_d] * bottom[index_d];
 	 }
@@ -283,9 +300,9 @@ __global__ void LUT198ApproximateCompute(const int n_threads, const Dtype* const
 
 template <typename Dtype>
 __global__ void LUT400ApproximateCompute(const int n_threads, const Dtype* const bottom,
-	                                 const Dtype* in, Dtype* out) {
-         float variable[400] = {1.0078125, 1.015625, 1.0234375, 1.03125, 1.0390625, 1.046875, 1.0546875, 1.0625, 
-	                        1.0703125, 1.078125, 1.0859375, 1.09375, 1.1015625, 1.109375, 1.1171875, 1.125 ,
+					 const Dtype* in, Dtype* out) {
+	 float variable[400] = {1.0078125, 1.015625, 1.0234375, 1.03125, 1.0390625, 1.046875, 1.0546875, 1.0625,
+				1.0703125, 1.078125, 1.0859375, 1.09375, 1.1015625, 1.109375, 1.1171875, 1.125 ,
 				1.1328125, 1.140625, 1.1484375, 1.15625, 1.1640625, 1.171875, 1.1796875, 1.1875,
 				1.1953125, 1.203125, 1.2109375, 1.21875, 1.2265625, 1.234375, 1.2421875, 1.25  ,
 				1.2578125, 1.265625, 1.2734375, 1.28125, 1.2890625, 1.296875, 1.3046875, 1.3125,
@@ -295,7 +312,7 @@ __global__ void LUT400ApproximateCompute(const int n_threads, const Dtype* const
 				1.5078125, 1.515625, 1.5234375, 1.53125, 1.5390625, 1.546875, 1.5546875, 1.5625,
 				1.5703125, 1.578125, 1.5859375, 1.59375, 1.6015625, 1.609375, 1.6171875, 1.625 ,
 				1.6328125, 1.640625, 1.6484375, 1.65625, 1.6640625, 1.671875, 1.6796875, 1.6875,
-				1.6953125, 1.703125, 1.7109375, 1.71875, 1.7265625, 1.734375, 1.7421875, 1.75  , 
+				1.6953125, 1.703125, 1.7109375, 1.71875, 1.7265625, 1.734375, 1.7421875, 1.75  ,
 				1.7578125, 1.765625, 1.7734375, 1.78125, 1.7890625, 1.796875, 1.8046875, 1.8125,
 				1.8203125, 1.828125, 1.8359375, 1.84375, 1.8515625, 1.859375, 1.8671875, 1.875 ,
 				1.8828125, 1.890625, 1.8984375, 1.90625, 1.9140625, 1.921875, 1.9296875, 1.9375,
@@ -335,7 +352,7 @@ __global__ void LUT400ApproximateCompute(const int n_threads, const Dtype* const
 				72.0     , 80.0    , 88.0     , 96.0   , 104.0    , 112.0   , 120.0    , 128.0 ,
 				160.0    , 192.0   , 224.0    , 256.0  , 384.0    , 512.0   , 768.0    , 1024};
  	 float values[400] = {0.9970868949715392, 0.9913065674403334, 0.9856038305678392, 0.9799770601249655,
-	                      0.9744246778971495, 0.9689451500454997, 0.9635369855380724, 0.9581987346477836,
+			      0.9744246778971495, 0.9689451500454997, 0.9635369855380724, 0.9581987346477836,
 			      0.9529289875136575, 0.9477263727623018, 0.9425895561866662, 0.9375172394793174,
 			      0.9325081590176012, 0.9275610846982196, 0.9226748188188776, 0.9178481950047831,
 			      0.9130800771779053, 0.9083693585670023, 0.903714960756542 , 0.8991158327727308,
@@ -435,21 +452,21 @@ __global__ void LUT400ApproximateCompute(const int n_threads, const Dtype* const
 			      0.0241216609483099, 0.0207325862539582, 0.0182816813209909, 0.0164158988436693,
 			      0.0133352473242522, 0.0103156522710535, 0.0079291833105098, 0.0061337226885514
  			   };
-        int length = sizeof(values) / sizeof(values[0]);
-			   
-        CUDA_KERNEL_LOOP(index_d, n_threads) {
+	int length = sizeof(values) / sizeof(values[0]);
+
+	CUDA_KERNEL_LOOP(index_d, n_threads) {
 	     if (in[index_d] > 1024)
-	         out[index_d] = 0.005;
+		 out[index_d] = 0.005;
 	     else {
-	         for(int index_v = 0; index_v < length; ++index_v) {
+		 for(int index_v = 0; index_v < length; ++index_v) {
 		     if (in[index_d] < variable[index_v]) {
-		         out[index_d] = values[index_v];
+			 out[index_d] = values[index_v];
 			 break;
 		     }
-	         }
+		 }
 	     }
 	     out[index_d] = out[index_d] * bottom[index_d];
-	 }  
+	 }
 }
 
 
@@ -488,42 +505,95 @@ void LRNLayer<Dtype>::CrossChannelForward_gpu(
        LUT_198 = 2,
        LUT_400 = 3
   } op_type;
-  
+
   op_type = POWER;
   int fixed_point = 0;
   int bit_width_in = 8;
   int fl_in = -5;
   int bit_width_out = 8;
   int fl_out = -3;
-    
+
+  //Dtype* tmp_top_data = scale_.mutable_cpu_data();
+  //int cnt[20] = {0,0,0,0,0,00,0,0,0,0,0,00,0,0,0,0,0,0,0,00};
+  //for (int i = 0; i < n_threads; ++i) {
+  //    if (tmp_top_data[i] < 2)
+  //	 cnt[0] = cnt[0] + 1;
+  //    else if (tmp_top_data[i] < 3)
+  //	 cnt[1] = cnt[1] + 1;
+  //    else if (tmp_top_data[i] < 4)
+  //	 cnt[2] = cnt[2] + 1;
+  //    else if (tmp_top_data[i] < 5)
+  //	 cnt[3] = cnt[3] + 1;
+  //    else if (tmp_top_data[i] < 6)
+  //	 cnt[4] = cnt[4] + 1;
+  //    else if (tmp_top_data[i] < 7)
+  //	 cnt[5] = cnt[5] + 1;
+  //    else if (tmp_top_data[i] < 8)
+  //	 cnt[6] = cnt[6] + 1;
+  //    else if (tmp_top_data[i] < 9)
+  //	 cnt[7] = cnt[7] + 1;
+  //    else if (tmp_top_data[i] < 10)
+  //	 cnt[8] = cnt[8] + 1;
+  //    else if (tmp_top_data[i] < 11)
+  //	 cnt[9] = cnt[9] + 1;
+  //    else if (tmp_top_data[i] < 12)
+  //	 cnt[10] = cnt[10] + 1;
+  //    else if (tmp_top_data[i] < 13)
+  //	 cnt[11] = cnt[11] + 1;
+  //    else if (tmp_top_data[i] < 14)
+  //	 cnt[12] = cnt[12] + 1;
+  //    else if (tmp_top_data[i] < 20)
+  //	 cnt[13] = cnt[13] + 1;
+  //    else if (tmp_top_data[i] < 30)
+  //	 cnt[14] = cnt[14] + 1;
+  //    else if (tmp_top_data[i] < 40)
+  //	 cnt[15] = cnt[15] + 1;
+  //    else if (tmp_top_data[i] < 50)
+  //	 cnt[16] = cnt[16] + 1;
+  //    else if (tmp_top_data[i] < 100)
+  //	 cnt[17] = cnt[17] + 1;
+  //    else if (tmp_top_data[i] < 200)
+  //	 cnt[18] = cnt[18] + 1;
+  //    else
+  //	 cnt[19] = cnt[19] + 1;
+  //}
+  //cout << "count: " << n_threads << ", 2: " << cnt[0] << ", 3: " << cnt[1] << ", 4: " << cnt[2] <<
+  //	  ", 5: " << cnt[3] << ", 6: " << cnt[4] << ", 7: " << cnt[5] << ", 8: " << cnt[6] <<
+  //	", 9: " << cnt[7] << ", 10: " << cnt[8] << ", 11: " << cnt[9] << ", 12: " << cnt[10] <<
+  //	", 13: " << cnt[11] << ", 14: " << cnt[12] << ", 20: " << cnt[13] << ", 30: " << cnt[14] <<
+  //	", 40: " << cnt[15] << ", 50: " << cnt[16] << ", 100: " << cnt[17] << ", 200: " << cnt[18] <<
+  //	", top: " << cnt[19] << endl;
+  //
+  //scale_data = scale_.mutable_gpu_data();
+
   switch(op_type) {
      case POWER:
       {
-         LRNComputeOutput<<<CAFFE_GET_BLOCKS(n_threads), CAFFE_CUDA_NUM_THREADS>>>(
+	 LRNComputeOutput<<<CAFFE_GET_BLOCKS(n_threads), CAFFE_CUDA_NUM_THREADS>>>(
   	     n_threads, bottom_data, scale_data, -beta_, top_data);
       	 break;
       }
      case AREAS:
       {
-        AREASApproximateCompute<<<CAFFE_GET_BLOCKS(n_threads), CAFFE_CUDA_NUM_THREADS>>>(
-          n_threads, bottom_data, scale_data, top_data, fixed_point,
+	AREASApproximateCompute<<<CAFFE_GET_BLOCKS(n_threads), CAFFE_CUDA_NUM_THREADS>>>(
+	  n_threads, bottom_data, scale_data, top_data, fixed_point,
 	  bit_width_in, fl_in, bit_width_out, fl_out);
 	break;
       }
      case LUT_198:
       {
-        LUT198ApproximateCompute<<<CAFFE_GET_BLOCKS(n_threads), CAFFE_CUDA_NUM_THREADS>>>(
-          n_threads, bottom_data, scale_data, top_data);
+	LUT198ApproximateCompute<<<CAFFE_GET_BLOCKS(n_threads), CAFFE_CUDA_NUM_THREADS>>>(
+	  n_threads, bottom_data, scale_data, top_data);
 	break;
       }
      case LUT_400:
       {
-        LUT400ApproximateCompute<<<CAFFE_GET_BLOCKS(n_threads), CAFFE_CUDA_NUM_THREADS>>>(
-          n_threads, bottom_data, scale_data, top_data);
+	LUT400ApproximateCompute<<<CAFFE_GET_BLOCKS(n_threads), CAFFE_CUDA_NUM_THREADS>>>(
+	  n_threads, bottom_data, scale_data, top_data);
 	break;
       }
      default:
-         LOG(FATAL) << "[ ERROR ] Please current set Within LRN approximate type.";
+	 LOG(FATAL) << "[ ERROR ] Please current set Within LRN approximate type.";
      }
   CUDA_POST_KERNEL_CHECK;
 }
@@ -574,33 +644,33 @@ __global__ void LRNComputeDiff(const int nthreads,
     // accumulate values
     while (head < post_pad && head < channels) {
       accum_ratio += top_diff_off[head * step] * top_off[head * step] /
-          scale_off[head * step];
+	  scale_off[head * step];
       ++head;
     }
     // both add and subtract
     while (head < channels) {
       accum_ratio += top_diff_off[head * step] * top_off[head * step] /
-          scale_off[head * step];
+	  scale_off[head * step];
       if (head - size >= 0) {
-        accum_ratio -= top_diff_off[(head - size) * step] *
-            top_off[(head - size) * step] / scale_off[(head - size) * step];
+	accum_ratio -= top_diff_off[(head - size) * step] *
+	    top_off[(head - size) * step] / scale_off[(head - size) * step];
       }
       bottom_diff_off[(head - post_pad) * step] =
-          top_diff_off[(head - post_pad) * step]
-            * pow(scale_off[(head - post_pad) * step], negative_beta)
-          - cache_ratio * bottom_off[(head - post_pad) * step] * accum_ratio;
+	  top_diff_off[(head - post_pad) * step]
+	    * pow(scale_off[(head - post_pad) * step], negative_beta)
+	  - cache_ratio * bottom_off[(head - post_pad) * step] * accum_ratio;
       ++head;
     }
     // subtract only
     while (head < channels + post_pad) {
       if (head - size >= 0) {
-        accum_ratio -= top_diff_off[(head - size) * step] *
-            top_off[(head - size) * step] / scale_off[(head - size) * step];
+	accum_ratio -= top_diff_off[(head - size) * step] *
+	    top_off[(head - size) * step] / scale_off[(head - size) * step];
       }
       bottom_diff_off[(head - post_pad) * step] =
-          top_diff_off[(head - post_pad) * step]
-            * pow(scale_off[(head - post_pad) * step], negative_beta)
-          - cache_ratio * bottom_off[(head - post_pad) * step] * accum_ratio;
+	  top_diff_off[(head - post_pad) * step]
+	    * pow(scale_off[(head - post_pad) * step], negative_beta)
+	  - cache_ratio * bottom_off[(head - post_pad) * step] * accum_ratio;
       ++head;
     }
   }
